@@ -1,0 +1,117 @@
+# =============================
+# Global / OS / Editor
+# =============================
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Logs / temp
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# =============================
+# Secrets (never commit)
+# =============================
+.env
+.env.*
+*.pem
+*.key
+*.jks
+*.keystore
+
+# =============================
+# Database backups / dumps
+# =============================
+backup database/
+!backup database/schema.sql
+
+# =============================
+# Flutter / Dart (bdstocktrend-app)
+# =============================
+# Dart tool state
+.dart_tool/
+.packages
+.pub/
+.pub-cache/
+
+# Flutter generated files
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
+
+# Build outputs
+build/
+
+# Generated localization (if used)
+# lib/generated/
+
+# Project-specific build logs found in repo
+bdstocktrend-app/build_log*.txt
+bdstocktrend-app/java.lang.NoSuchFieldError
+
+# =============================
+# Android / Gradle (Flutter + backend)
+# =============================
+.gradle/
+**/local.properties
+**/key.properties
+
+# Android Studio / IntelliJ output dirs
+**/out/
+
+# =============================
+# Java / Gradle backend (bdstocktrend-backend)
+# =============================
+# Build artifacts
+bdstocktrend-backend/build/
+bdstocktrend-backend/bin/
+
+# Optional: JVM crash logs
+hs_err_pid*
+
+# Backend specific log artifacts found in repo
+bdstocktrend-backend/java.lang.NoSuchFieldError
+
+# =============================
+# Laravel / PHP backend (bdstocktrend-backend-php)
+# =============================
+# Dependencies
+bdstocktrend-backend-php/vendor/
+
+# Runtime/cache
+bdstocktrend-backend-php/storage/*.key
+bdstocktrend-backend-php/storage/logs/
+bdstocktrend-backend-php/storage/framework/
+bdstocktrend-backend-php/storage/app/public/
+bdstocktrend-backend-php/bootstrap/cache/
+
+# Laravel Mix / Vite build outputs (if present)
+public/hot
+public/storage
+public/build/
+
+# =============================
+# Flutter platform folders already have their own .gitignore
+# (android/ios/windows inside bdstocktrend-app)
+# =============================
+
+# =============================
+# Prophet forecasting engine (bdstocktrend-forecasting-engine-prophet)
+# =============================
+bdstocktrend-forecasting-engine-prophet/data/
+bdstocktrend-forecasting-engine-prophet/__pycache__/
+bdstocktrend-forecasting-engine-prophet/.pytest_cache/
+bdstocktrend-forecasting-engine-prophet/.mypy_cache/
+bdstocktrend-forecasting-engine-prophet/.ruff_cache/
+bdstocktrend-forecasting-engine-prophet/.venv/
+bdstocktrend-forecasting-engine-prophet/venv/

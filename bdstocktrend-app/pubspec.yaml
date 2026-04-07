@@ -1,0 +1,151 @@
+name: bd_stock_trend
+description: This is base for my project in flutter
+
+# The following line prevents the package from being accidentally published to
+# pub.dev using `pub publish`. This is preferred for private packages.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+# The following defines the version and build number for your application.
+# A version number is three numbers separated by dots, like 1.2.43
+# followed by an optional build number separated by a +.
+# Both the version and the builder number may be overridden in flutter
+# build by specifying --build-name and --build-number, respectively.
+# In Android, build-name is used as versionName while build-number used as versionCode.
+# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
+# In iOS, build-name is used as CFBundleShortVersionString while build-number used as CFBundleVersion.
+# Read more about iOS versioning at
+# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.0.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  fluttertoast:
+  flutter_sslcommerz:
+    path: plugins/flutter_sslcommerz
+
+  uuid:
+
+  # The following adds the Cupertino Icons font to your application.
+  # Use with the CupertinoIcons class for iOS style icons.
+  cupertino_icons: ^1.0.6
+
+  # Use as default SVG image loader, prefer use SVG as image asset
+  flutter_svg: ^2.0.10+1
+
+  # Image Picker
+  image_picker: ^1.0.7
+
+  # Functional programming thingies
+  dartz: ^0.10.1
+
+  # Use as Network Client
+  dio: ^5.4.1
+
+  # Use hive to save local data
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  # Use for Dependencies Injection
+  get_it:
+
+  # Use for State Management with BLoC pattern
+  flutter_bloc:
+
+
+  # Use for custom toast with Status, ex : Loading,Success,Failed
+  oktoast: ^3.4.0
+
+  # Use for responsive UI, set default size base on Mock Up
+  flutter_screenutil: ^5.9.0
+
+  cached_network_image:
+
+  # logger
+  logger: ^2.0.2+1
+
+  # Firebase
+  # firebase_core: ^2.25.4
+  # firebase_analytics: ^10.8.6
+  # firebase_crashlytics: ^3.4.15
+
+  # router
+  go_router:
+
+  # Freezed
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.8.1
+
+  fl_chart:
+  flutter_native_splash: ^2.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_launcher_icons:
+  #Remove unused files
+#  dart_code_metrics: ^4.21.0
+  lint: ^2.3.0
+  flutter_lints:
+  bloc_test:
+  build_runner: ^2.4.9
+  http_mock_adapter:
+
+  #Temporary using old version because error when generate build_runner
+  mockito: ^5.4.1
+
+  # Freezed
+  freezed: ^2.4.7
+  json_serializable: ^6.8.0
+
+  # hive generator
+  hive_generator:
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter.
+flutter:
+  generate: true
+
+  # The following line ensures that the Material Icons font is
+  # included with your application, so that you can use the icons in
+  # the material Icons class.
+  uses-material-design: true
+
+  # To add assets to your application, add an assets section, like this:
+  assets:
+    - assets/images/
+    - assets/fonts/
+
+  fonts:
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Thin.ttf
+          weight: 100
+        - asset: assets/fonts/Poppins-ExtraLight.ttf
+          weight: 200
+        - asset: assets/fonts/Poppins-Light.ttf
+          weight: 300
+        - asset: assets/fonts/Poppins-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Poppins-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Poppins-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Poppins-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Poppins-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/Poppins-Black.ttf
+          weight: 900
+
+  #
+  # For details regarding fonts from package dependencies,
+  # see https://flutter.dev/custom-fonts/#from-packages

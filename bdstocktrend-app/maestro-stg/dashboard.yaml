@@ -1,0 +1,6 @@
+appId: iit.nstu.bdstocktrend.stg
+---
+- swipe:
+    direction: "UP"
+- swipe:
+    direction: "UP"

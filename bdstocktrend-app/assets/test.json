@@ -1,0 +1,36 @@
+curl --location 'https: //securepay.sslcommerz.com/gwprocess/v4/sdk.php' \
+--header 'Content-Type: application/x-www-form-urlencoded' \
+--data-urlencode 'store_id=arnab66c33fb2149e4' \
+--data-urlencode 'store_passwd=arnab66c33fb2149e4@ssl' \
+--data-urlencode 'total_amount=100' \
+--data-urlencode 'currency=BDT' \
+--data-urlencode 'tran_id=REF123' \
+--data-urlencode 'success_url=http: //localhost:8080/payment/success' \
+--data-urlencode 'fail_url=http: //localhost:8080/payment/cancel' \
+--data-urlencode 'cancel_url=http: //localhost:8080/payment/fail' \
+--data-urlencode 'cus_name=Customer Name' \
+--data-urlencode 'cus_email=cust@yahoo.com' \
+--data-urlencode 'cus_add1=Dhaka' \
+--data-urlencode 'cus_add2=Dhaka' \
+--data-urlencode 'cus_city=Dhaka' \
+--data-urlencode 'cus_state=Dhaka' \
+--data-urlencode 'cus_postcode=1000' \
+--data-urlencode 'cus_country=Bangladesh' \
+--data-urlencode 'cus_phone=01711111111' \
+--data-urlencode 'cus_fax=01711111111' \
+--data-urlencode 'ship_name=Customer Name' \
+--data-urlencode 'ship_add1=Dhaka' \
+--data-urlencode 'ship_add2=Dhaka' \
+--data-urlencode 'ship_city=Dhaka' \
+--data-urlencode 'ship_state=Dhaka' \
+--data-urlencode 'ship_postcode=1000' \
+--data-urlencode 'ship_country=Bangladesh' \
+--data-urlencode 'multi_card_name=mastercard,visacard,amexcard' \
+--data-urlencode 'value_a=ref001_A' \
+--data-urlencode 'value_b=ref002_B' \
+--data-urlencode 'value_c=ref003_C' \
+--data-urlencode 'value_d=ref004_D' \
+--data-urlencode 'shipping_method=NO' \
+--data-urlencode 'product_name=Computer' \
+--data-urlencode 'product_category=Electronic' \
+--data-urlencode 'product_profile=general'
