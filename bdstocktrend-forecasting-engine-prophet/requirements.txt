@@ -1,4 +1,5 @@
 fastapi==0.115.12
+asgi2wsgi==1.4.1
 uvicorn[standard]==0.34.2
 pandas==2.2.3
 numpy==2.1.3

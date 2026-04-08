@@ -18,6 +18,10 @@ _$CompanyDetailsResponseImpl _$$CompanyDetailsResponseImplFromJson(
       next30Days: (json['next30Days'] as List<dynamic>?)
           ?.map((e) => TimeSeriesData.fromJson(e as Map<String, dynamic>))
           .toList(),
+      forecastMeta: json['forecastMeta'] == null
+          ? null
+          : ForecastMetaData.fromJson(
+              json['forecastMeta'] as Map<String, dynamic>),
     );
 
 Map<String, dynamic> _$$CompanyDetailsResponseImplToJson(
@@ -26,6 +30,7 @@ Map<String, dynamic> _$$CompanyDetailsResponseImplToJson(
       'info': instance.info?.toJson(),
       'last30Days': instance.last30Days?.map((e) => e.toJson()).toList(),
       'next30Days': instance.next30Days?.map((e) => e.toJson()).toList(),
+      'forecastMeta': instance.forecastMeta?.toJson(),
     };
 
 _$TimeSeriesDataImpl _$$TimeSeriesDataImplFromJson(Map<String, dynamic> json) =>
@@ -33,6 +38,8 @@ _$TimeSeriesDataImpl _$$TimeSeriesDataImplFromJson(Map<String, dynamic> json) =>
       time:
           json['time'] == null ? null : DateTime.parse(json['time'] as String),
       value: (json['value'] as num?)?.toDouble(),
+      low: (json['low'] as num?)?.toDouble(),
+      high: (json['high'] as num?)?.toDouble(),
     );
 
 Map<String, dynamic> _$$TimeSeriesDataImplToJson(
@@ -40,6 +47,24 @@ Map<String, dynamic> _$$TimeSeriesDataImplToJson(
     <String, dynamic>{
       'time': instance.time?.toIso8601String(),
       'value': instance.value,
+      'low': instance.low,
+      'high': instance.high,
+    };
+
+_$ForecastMetaDataImpl _$$ForecastMetaDataImplFromJson(
+        Map<String, dynamic> json) =>
+    _$ForecastMetaDataImpl(
+      intervalWidth: (json['intervalWidth'] as num?)?.toDouble(),
+      confidenceLevel: (json['confidenceLevel'] as num?)?.toDouble(),
+      disclaimer: json['disclaimer'] as String?,
+    );
+
+Map<String, dynamic> _$$ForecastMetaDataImplToJson(
+        _$ForecastMetaDataImpl instance) =>
+    <String, dynamic>{
+      'intervalWidth': instance.intervalWidth,
+      'confidenceLevel': instance.confidenceLevel,
+      'disclaimer': instance.disclaimer,
     };
 
 _$ScripDetailsInfoDataImpl _$$ScripDetailsInfoDataImplFromJson(

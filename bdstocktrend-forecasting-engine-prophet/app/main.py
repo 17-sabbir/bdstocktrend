@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+import logging
+import time
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 
 from app.config import settings
 from app.db import close_db, init_db
@@ -8,6 +10,27 @@ from app.modeling import forecast_next_days, list_codes, schedule_training
 
 
 app = FastAPI(title=settings.app_name, version=settings.app_version)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    
+    response = await call_next(request)
+    
+    process_time = (time.time() - start_time) * 1000
+    formatted_process_time = '{0:.2f}'.format(process_time)
+    
+    logger.info(
+        f"Request: {request.method} {request.url.path} | "
+        f"Status: {response.status_code} | "
+        f"Duration: {formatted_process_time}ms"
+    )
+    
+    return response
 
 
 @app.on_event("startup")

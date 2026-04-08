@@ -7,26 +7,31 @@ import 'dart:async' as _i6;
 
 import 'package:bd_stock_trend/core/core.dart' as _i7;
 import 'package:bd_stock_trend/features/auth/auth.dart' as _i5;
-import 'package:bd_stock_trend/features/companies/data/datasources/company_remote_datasources.dart'
-    as _i13;
-import 'package:bd_stock_trend/features/companies/data/models/companies_response.dart'
-    as _i14;
-import 'package:bd_stock_trend/features/companies/data/models/company_details_response.dart'
-    as _i15;
-import 'package:bd_stock_trend/features/companies/domain/entities/companies.dart'
-    as _i9;
-import 'package:bd_stock_trend/features/companies/domain/entities/company_details.dart'
-    as _i11;
-import 'package:bd_stock_trend/features/companies/domain/repositories/companies_repository.dart'
-    as _i8;
-import 'package:bd_stock_trend/features/companies/domain/usecases/get_companies.dart'
+import 'package:bd_stock_trend/features/auth/data/models/user_dto.dart' as _i8;
+import 'package:bd_stock_trend/features/auth/domain/usecases/change_password_params.dart'
     as _i10;
-import 'package:bd_stock_trend/features/companies/domain/usecases/get_company_details.dart'
+import 'package:bd_stock_trend/features/auth/domain/usecases/update_profile_params.dart'
+    as _i9;
+import 'package:bd_stock_trend/features/companies/data/datasources/company_remote_datasources.dart'
+    as _i16;
+import 'package:bd_stock_trend/features/companies/data/models/companies_response.dart'
+    as _i17;
+import 'package:bd_stock_trend/features/companies/data/models/company_details_response.dart'
+    as _i18;
+import 'package:bd_stock_trend/features/companies/domain/entities/companies.dart'
     as _i12;
+import 'package:bd_stock_trend/features/companies/domain/entities/company_details.dart'
+    as _i14;
+import 'package:bd_stock_trend/features/companies/domain/repositories/companies_repository.dart'
+    as _i11;
+import 'package:bd_stock_trend/features/companies/domain/usecases/get_companies.dart'
+    as _i13;
+import 'package:bd_stock_trend/features/companies/domain/usecases/get_company_details.dart'
+    as _i15;
 import 'package:dartz/dartz.dart' as _i2;
 import 'package:flutter/foundation.dart' as _i4;
 import 'package:flutter/src/widgets/framework.dart' as _i3;
-import 'package:flutter/src/widgets/notification_listener.dart' as _i16;
+import 'package:flutter/src/widgets/notification_listener.dart' as _i19;
 import 'package:mockito/mockito.dart' as _i1;
 
 // ignore_for_file: type=lint
@@ -142,6 +147,42 @@ class MockAuthRepository extends _i1.Mock implements _i5.AuthRepository {
           ),
         )),
       ) as _i6.Future<_i2.Either<_i7.Failure, _i5.Register>>);
+
+  @override
+  _i6.Future<_i2.Either<_i7.Failure, _i8.UserDto>> updateProfile(
+          _i9.UpdateProfileParams? params) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #updateProfile,
+          [params],
+        ),
+        returnValue: _i6.Future<_i2.Either<_i7.Failure, _i8.UserDto>>.value(
+            _FakeEither_0<_i7.Failure, _i8.UserDto>(
+          this,
+          Invocation.method(
+            #updateProfile,
+            [params],
+          ),
+        )),
+      ) as _i6.Future<_i2.Either<_i7.Failure, _i8.UserDto>>);
+
+  @override
+  _i6.Future<_i2.Either<_i7.Failure, String>> changePassword(
+          _i10.ChangePasswordParams? params) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #changePassword,
+          [params],
+        ),
+        returnValue: _i6.Future<_i2.Either<_i7.Failure, String>>.value(
+            _FakeEither_0<_i7.Failure, String>(
+          this,
+          Invocation.method(
+            #changePassword,
+            [params],
+          ),
+        )),
+      ) as _i6.Future<_i2.Either<_i7.Failure, String>>);
 }
 
 /// A class which mocks [AuthRemoteDatasource].
@@ -190,102 +231,138 @@ class MockAuthRemoteDatasource extends _i1.Mock
           ),
         )),
       ) as _i6.Future<_i2.Either<_i7.Failure, _i5.LoginResponse>>);
+
+  @override
+  _i6.Future<_i2.Either<_i7.Failure, _i8.UserDto>> updateProfile(
+          _i9.UpdateProfileParams? params) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #updateProfile,
+          [params],
+        ),
+        returnValue: _i6.Future<_i2.Either<_i7.Failure, _i8.UserDto>>.value(
+            _FakeEither_0<_i7.Failure, _i8.UserDto>(
+          this,
+          Invocation.method(
+            #updateProfile,
+            [params],
+          ),
+        )),
+      ) as _i6.Future<_i2.Either<_i7.Failure, _i8.UserDto>>);
+
+  @override
+  _i6.Future<_i2.Either<_i7.Failure, String>> changePassword(
+          _i10.ChangePasswordParams? params) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #changePassword,
+          [params],
+        ),
+        returnValue: _i6.Future<_i2.Either<_i7.Failure, String>>.value(
+            _FakeEither_0<_i7.Failure, String>(
+          this,
+          Invocation.method(
+            #changePassword,
+            [params],
+          ),
+        )),
+      ) as _i6.Future<_i2.Either<_i7.Failure, String>>);
 }
 
 /// A class which mocks [CompaniesRepository].
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockCompaniesRepository extends _i1.Mock
-    implements _i8.CompaniesRepository {
+    implements _i11.CompaniesRepository {
   MockCompaniesRepository() {
     _i1.throwOnMissingStub(this);
   }
 
   @override
-  _i6.Future<_i2.Either<_i7.Failure, _i9.Companies>> companies(
-          _i10.UsersParams? usersParams) =>
+  _i6.Future<_i2.Either<_i7.Failure, _i12.Companies>> companies(
+          _i13.UsersParams? usersParams) =>
       (super.noSuchMethod(
         Invocation.method(
           #companies,
           [usersParams],
         ),
-        returnValue: _i6.Future<_i2.Either<_i7.Failure, _i9.Companies>>.value(
-            _FakeEither_0<_i7.Failure, _i9.Companies>(
+        returnValue: _i6.Future<_i2.Either<_i7.Failure, _i12.Companies>>.value(
+            _FakeEither_0<_i7.Failure, _i12.Companies>(
           this,
           Invocation.method(
             #companies,
             [usersParams],
           ),
         )),
-      ) as _i6.Future<_i2.Either<_i7.Failure, _i9.Companies>>);
+      ) as _i6.Future<_i2.Either<_i7.Failure, _i12.Companies>>);
 
   @override
-  _i6.Future<_i2.Either<_i7.Failure, _i11.CompanyDetails>> companyDetails(
-          _i12.CompanyParams? params) =>
+  _i6.Future<_i2.Either<_i7.Failure, _i14.CompanyDetails>> companyDetails(
+          _i15.CompanyParams? params) =>
       (super.noSuchMethod(
         Invocation.method(
           #companyDetails,
           [params],
         ),
         returnValue:
-            _i6.Future<_i2.Either<_i7.Failure, _i11.CompanyDetails>>.value(
-                _FakeEither_0<_i7.Failure, _i11.CompanyDetails>(
+            _i6.Future<_i2.Either<_i7.Failure, _i14.CompanyDetails>>.value(
+                _FakeEither_0<_i7.Failure, _i14.CompanyDetails>(
           this,
           Invocation.method(
             #companyDetails,
             [params],
           ),
         )),
-      ) as _i6.Future<_i2.Either<_i7.Failure, _i11.CompanyDetails>>);
+      ) as _i6.Future<_i2.Either<_i7.Failure, _i14.CompanyDetails>>);
 }
 
 /// A class which mocks [CompaniesRemoteDatasource].
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockCompaniesRemoteDatasource extends _i1.Mock
-    implements _i13.CompaniesRemoteDatasource {
+    implements _i16.CompaniesRemoteDatasource {
   MockCompaniesRemoteDatasource() {
     _i1.throwOnMissingStub(this);
   }
 
   @override
-  _i6.Future<_i2.Either<_i7.Failure, _i14.CompaniesResponse>> companies(
-          _i10.UsersParams? userParams) =>
+  _i6.Future<_i2.Either<_i7.Failure, _i17.CompaniesResponse>> companies(
+          _i13.UsersParams? userParams) =>
       (super.noSuchMethod(
         Invocation.method(
           #companies,
           [userParams],
         ),
         returnValue:
-            _i6.Future<_i2.Either<_i7.Failure, _i14.CompaniesResponse>>.value(
-                _FakeEither_0<_i7.Failure, _i14.CompaniesResponse>(
+            _i6.Future<_i2.Either<_i7.Failure, _i17.CompaniesResponse>>.value(
+                _FakeEither_0<_i7.Failure, _i17.CompaniesResponse>(
           this,
           Invocation.method(
             #companies,
             [userParams],
           ),
         )),
-      ) as _i6.Future<_i2.Either<_i7.Failure, _i14.CompaniesResponse>>);
+      ) as _i6.Future<_i2.Either<_i7.Failure, _i17.CompaniesResponse>>);
 
   @override
   _i6.Future<
-      _i2.Either<_i7.Failure, _i15.CompanyDetailsResponse>> companyDetails(
-          _i12.CompanyParams? params) =>
+      _i2.Either<_i7.Failure, _i18.CompanyDetailsResponse>> companyDetails(
+          _i15.CompanyParams? params) =>
       (super.noSuchMethod(
         Invocation.method(
           #companyDetails,
           [params],
         ),
         returnValue: _i6
-            .Future<_i2.Either<_i7.Failure, _i15.CompanyDetailsResponse>>.value(
-            _FakeEither_0<_i7.Failure, _i15.CompanyDetailsResponse>(
+            .Future<_i2.Either<_i7.Failure, _i18.CompanyDetailsResponse>>.value(
+            _FakeEither_0<_i7.Failure, _i18.CompanyDetailsResponse>(
           this,
           Invocation.method(
             #companyDetails,
             [params],
           ),
         )),
-      ) as _i6.Future<_i2.Either<_i7.Failure, _i15.CompanyDetailsResponse>>);
+      ) as _i6.Future<_i2.Either<_i7.Failure, _i18.CompanyDetailsResponse>>);
 }
 
 /// A class which mocks [BuildContext].
@@ -368,7 +445,7 @@ class MockBuildContext extends _i1.Mock implements _i3.BuildContext {
       );
 
   @override
-  void dispatchNotification(_i16.Notification? notification) =>
+  void dispatchNotification(_i19.Notification? notification) =>
       super.noSuchMethod(
         Invocation.method(
           #dispatchNotification,

@@ -24,6 +24,7 @@ mixin _$CompanyDetailsResponse {
   ScripDetailsInfoData? get info => throw _privateConstructorUsedError;
   List<TimeSeriesData>? get last30Days => throw _privateConstructorUsedError;
   List<TimeSeriesData>? get next30Days => throw _privateConstructorUsedError;
+  ForecastMetaData? get forecastMeta => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -40,9 +41,11 @@ abstract class $CompanyDetailsResponseCopyWith<$Res> {
   $Res call(
       {ScripDetailsInfoData? info,
       List<TimeSeriesData>? last30Days,
-      List<TimeSeriesData>? next30Days});
+      List<TimeSeriesData>? next30Days,
+      ForecastMetaData? forecastMeta});
 
   $ScripDetailsInfoDataCopyWith<$Res>? get info;
+  $ForecastMetaDataCopyWith<$Res>? get forecastMeta;
 }
 
 /// @nodoc
@@ -62,6 +65,7 @@ class _$CompanyDetailsResponseCopyWithImpl<$Res,
     Object? info = freezed,
     Object? last30Days = freezed,
     Object? next30Days = freezed,
+    Object? forecastMeta = freezed,
   }) {
     return _then(_value.copyWith(
       info: freezed == info
@@ -76,6 +80,10 @@ class _$CompanyDetailsResponseCopyWithImpl<$Res,
           ? _value.next30Days
           : next30Days // ignore: cast_nullable_to_non_nullable
               as List<TimeSeriesData>?,
+      forecastMeta: freezed == forecastMeta
+          ? _value.forecastMeta
+          : forecastMeta // ignore: cast_nullable_to_non_nullable
+              as ForecastMetaData?,
     ) as $Val);
   }
 
@@ -88,6 +96,18 @@ class _$CompanyDetailsResponseCopyWithImpl<$Res,
 
     return $ScripDetailsInfoDataCopyWith<$Res>(_value.info!, (value) {
       return _then(_value.copyWith(info: value) as $Val);
+    });
+  }
+
+  @override
+  @pragma('vm:prefer-inline')
+  $ForecastMetaDataCopyWith<$Res>? get forecastMeta {
+    if (_value.forecastMeta == null) {
+      return null;
+    }
+
+    return $ForecastMetaDataCopyWith<$Res>(_value.forecastMeta!, (value) {
+      return _then(_value.copyWith(forecastMeta: value) as $Val);
     });
   }
 }
@@ -104,10 +124,13 @@ abstract class _$$CompanyDetailsResponseImplCopyWith<$Res>
   $Res call(
       {ScripDetailsInfoData? info,
       List<TimeSeriesData>? last30Days,
-      List<TimeSeriesData>? next30Days});
+      List<TimeSeriesData>? next30Days,
+      ForecastMetaData? forecastMeta});
 
   @override
   $ScripDetailsInfoDataCopyWith<$Res>? get info;
+  @override
+  $ForecastMetaDataCopyWith<$Res>? get forecastMeta;
 }
 
 /// @nodoc
@@ -126,6 +149,7 @@ class __$$CompanyDetailsResponseImplCopyWithImpl<$Res>
     Object? info = freezed,
     Object? last30Days = freezed,
     Object? next30Days = freezed,
+    Object? forecastMeta = freezed,
   }) {
     return _then(_$CompanyDetailsResponseImpl(
       info: freezed == info
@@ -140,6 +164,10 @@ class __$$CompanyDetailsResponseImplCopyWithImpl<$Res>
           ? _value._next30Days
           : next30Days // ignore: cast_nullable_to_non_nullable
               as List<TimeSeriesData>?,
+      forecastMeta: freezed == forecastMeta
+          ? _value.forecastMeta
+          : forecastMeta // ignore: cast_nullable_to_non_nullable
+              as ForecastMetaData?,
     ));
   }
 }
@@ -150,7 +178,8 @@ class _$CompanyDetailsResponseImpl extends _CompanyDetailsResponse {
   const _$CompanyDetailsResponseImpl(
       {this.info,
       final List<TimeSeriesData>? last30Days,
-      final List<TimeSeriesData>? next30Days})
+      final List<TimeSeriesData>? next30Days,
+      this.forecastMeta})
       : _last30Days = last30Days,
         _next30Days = next30Days,
         super._();
@@ -181,8 +210,11 @@ class _$CompanyDetailsResponseImpl extends _CompanyDetailsResponse {
   }
 
   @override
+  final ForecastMetaData? forecastMeta;
+
+  @override
   String toString() {
-    return 'CompanyDetailsResponse(info: $info, last30Days: $last30Days, next30Days: $next30Days)';
+    return 'CompanyDetailsResponse(info: $info, last30Days: $last30Days, next30Days: $next30Days, forecastMeta: $forecastMeta)';
   }
 
   @override
@@ -194,7 +226,9 @@ class _$CompanyDetailsResponseImpl extends _CompanyDetailsResponse {
             const DeepCollectionEquality()
                 .equals(other._last30Days, _last30Days) &&
             const DeepCollectionEquality()
-                .equals(other._next30Days, _next30Days));
+                .equals(other._next30Days, _next30Days) &&
+            (identical(other.forecastMeta, forecastMeta) ||
+                other.forecastMeta == forecastMeta));
   }
 
   @JsonKey(ignore: true)
@@ -203,7 +237,8 @@ class _$CompanyDetailsResponseImpl extends _CompanyDetailsResponse {
       runtimeType,
       info,
       const DeepCollectionEquality().hash(_last30Days),
-      const DeepCollectionEquality().hash(_next30Days));
+      const DeepCollectionEquality().hash(_next30Days),
+      forecastMeta);
 
   @JsonKey(ignore: true)
   @override
@@ -224,7 +259,8 @@ abstract class _CompanyDetailsResponse extends CompanyDetailsResponse {
   const factory _CompanyDetailsResponse(
       {final ScripDetailsInfoData? info,
       final List<TimeSeriesData>? last30Days,
-      final List<TimeSeriesData>? next30Days}) = _$CompanyDetailsResponseImpl;
+      final List<TimeSeriesData>? next30Days,
+      final ForecastMetaData? forecastMeta}) = _$CompanyDetailsResponseImpl;
   const _CompanyDetailsResponse._() : super._();
 
   factory _CompanyDetailsResponse.fromJson(Map<String, dynamic> json) =
@@ -236,6 +272,8 @@ abstract class _CompanyDetailsResponse extends CompanyDetailsResponse {
   List<TimeSeriesData>? get last30Days;
   @override
   List<TimeSeriesData>? get next30Days;
+  @override
+  ForecastMetaData? get forecastMeta;
   @override
   @JsonKey(ignore: true)
   _$$CompanyDetailsResponseImplCopyWith<_$CompanyDetailsResponseImpl>
@@ -250,6 +288,8 @@ TimeSeriesData _$TimeSeriesDataFromJson(Map<String, dynamic> json) {
 mixin _$TimeSeriesData {
   DateTime? get time => throw _privateConstructorUsedError;
   double? get value => throw _privateConstructorUsedError;
+  double? get low => throw _privateConstructorUsedError;
+  double? get high => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -263,7 +303,7 @@ abstract class $TimeSeriesDataCopyWith<$Res> {
           TimeSeriesData value, $Res Function(TimeSeriesData) then) =
       _$TimeSeriesDataCopyWithImpl<$Res, TimeSeriesData>;
   @useResult
-  $Res call({DateTime? time, double? value});
+  $Res call({DateTime? time, double? value, double? low, double? high});
 }
 
 /// @nodoc
@@ -281,6 +321,8 @@ class _$TimeSeriesDataCopyWithImpl<$Res, $Val extends TimeSeriesData>
   $Res call({
     Object? time = freezed,
     Object? value = freezed,
+    Object? low = freezed,
+    Object? high = freezed,
   }) {
     return _then(_value.copyWith(
       time: freezed == time
@@ -290,6 +332,14 @@ class _$TimeSeriesDataCopyWithImpl<$Res, $Val extends TimeSeriesData>
       value: freezed == value
           ? _value.value
           : value // ignore: cast_nullable_to_non_nullable
+              as double?,
+      low: freezed == low
+          ? _value.low
+          : low // ignore: cast_nullable_to_non_nullable
+              as double?,
+      high: freezed == high
+          ? _value.high
+          : high // ignore: cast_nullable_to_non_nullable
               as double?,
     ) as $Val);
   }
@@ -303,7 +353,7 @@ abstract class _$$TimeSeriesDataImplCopyWith<$Res>
       __$$TimeSeriesDataImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({DateTime? time, double? value});
+  $Res call({DateTime? time, double? value, double? low, double? high});
 }
 
 /// @nodoc
@@ -319,6 +369,8 @@ class __$$TimeSeriesDataImplCopyWithImpl<$Res>
   $Res call({
     Object? time = freezed,
     Object? value = freezed,
+    Object? low = freezed,
+    Object? high = freezed,
   }) {
     return _then(_$TimeSeriesDataImpl(
       time: freezed == time
@@ -329,6 +381,14 @@ class __$$TimeSeriesDataImplCopyWithImpl<$Res>
           ? _value.value
           : value // ignore: cast_nullable_to_non_nullable
               as double?,
+      low: freezed == low
+          ? _value.low
+          : low // ignore: cast_nullable_to_non_nullable
+              as double?,
+      high: freezed == high
+          ? _value.high
+          : high // ignore: cast_nullable_to_non_nullable
+              as double?,
     ));
   }
 }
@@ -336,7 +396,7 @@ class __$$TimeSeriesDataImplCopyWithImpl<$Res>
 /// @nodoc
 @JsonSerializable()
 class _$TimeSeriesDataImpl implements _TimeSeriesData {
-  const _$TimeSeriesDataImpl({this.time, this.value});
+  const _$TimeSeriesDataImpl({this.time, this.value, this.low, this.high});
 
   factory _$TimeSeriesDataImpl.fromJson(Map<String, dynamic> json) =>
       _$$TimeSeriesDataImplFromJson(json);
@@ -345,10 +405,14 @@ class _$TimeSeriesDataImpl implements _TimeSeriesData {
   final DateTime? time;
   @override
   final double? value;
+  @override
+  final double? low;
+  @override
+  final double? high;
 
   @override
   String toString() {
-    return 'TimeSeriesData(time: $time, value: $value)';
+    return 'TimeSeriesData(time: $time, value: $value, low: $low, high: $high)';
   }
 
   @override
@@ -357,12 +421,14 @@ class _$TimeSeriesDataImpl implements _TimeSeriesData {
         (other.runtimeType == runtimeType &&
             other is _$TimeSeriesDataImpl &&
             (identical(other.time, time) || other.time == time) &&
-            (identical(other.value, value) || other.value == value));
+            (identical(other.value, value) || other.value == value) &&
+            (identical(other.low, low) || other.low == low) &&
+            (identical(other.high, high) || other.high == high));
   }
 
   @JsonKey(ignore: true)
   @override
-  int get hashCode => Object.hash(runtimeType, time, value);
+  int get hashCode => Object.hash(runtimeType, time, value, low, high);
 
   @JsonKey(ignore: true)
   @override
@@ -380,8 +446,11 @@ class _$TimeSeriesDataImpl implements _TimeSeriesData {
 }
 
 abstract class _TimeSeriesData implements TimeSeriesData {
-  const factory _TimeSeriesData({final DateTime? time, final double? value}) =
-      _$TimeSeriesDataImpl;
+  const factory _TimeSeriesData(
+      {final DateTime? time,
+      final double? value,
+      final double? low,
+      final double? high}) = _$TimeSeriesDataImpl;
 
   factory _TimeSeriesData.fromJson(Map<String, dynamic> json) =
       _$TimeSeriesDataImpl.fromJson;
@@ -391,8 +460,193 @@ abstract class _TimeSeriesData implements TimeSeriesData {
   @override
   double? get value;
   @override
+  double? get low;
+  @override
+  double? get high;
+  @override
   @JsonKey(ignore: true)
   _$$TimeSeriesDataImplCopyWith<_$TimeSeriesDataImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+ForecastMetaData _$ForecastMetaDataFromJson(Map<String, dynamic> json) {
+  return _ForecastMetaData.fromJson(json);
+}
+
+/// @nodoc
+mixin _$ForecastMetaData {
+  double? get intervalWidth => throw _privateConstructorUsedError;
+  double? get confidenceLevel => throw _privateConstructorUsedError;
+  String? get disclaimer => throw _privateConstructorUsedError;
+
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+  @JsonKey(ignore: true)
+  $ForecastMetaDataCopyWith<ForecastMetaData> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $ForecastMetaDataCopyWith<$Res> {
+  factory $ForecastMetaDataCopyWith(
+          ForecastMetaData value, $Res Function(ForecastMetaData) then) =
+      _$ForecastMetaDataCopyWithImpl<$Res, ForecastMetaData>;
+  @useResult
+  $Res call(
+      {double? intervalWidth, double? confidenceLevel, String? disclaimer});
+}
+
+/// @nodoc
+class _$ForecastMetaDataCopyWithImpl<$Res, $Val extends ForecastMetaData>
+    implements $ForecastMetaDataCopyWith<$Res> {
+  _$ForecastMetaDataCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? intervalWidth = freezed,
+    Object? confidenceLevel = freezed,
+    Object? disclaimer = freezed,
+  }) {
+    return _then(_value.copyWith(
+      intervalWidth: freezed == intervalWidth
+          ? _value.intervalWidth
+          : intervalWidth // ignore: cast_nullable_to_non_nullable
+              as double?,
+      confidenceLevel: freezed == confidenceLevel
+          ? _value.confidenceLevel
+          : confidenceLevel // ignore: cast_nullable_to_non_nullable
+              as double?,
+      disclaimer: freezed == disclaimer
+          ? _value.disclaimer
+          : disclaimer // ignore: cast_nullable_to_non_nullable
+              as String?,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$ForecastMetaDataImplCopyWith<$Res>
+    implements $ForecastMetaDataCopyWith<$Res> {
+  factory _$$ForecastMetaDataImplCopyWith(_$ForecastMetaDataImpl value,
+          $Res Function(_$ForecastMetaDataImpl) then) =
+      __$$ForecastMetaDataImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {double? intervalWidth, double? confidenceLevel, String? disclaimer});
+}
+
+/// @nodoc
+class __$$ForecastMetaDataImplCopyWithImpl<$Res>
+    extends _$ForecastMetaDataCopyWithImpl<$Res, _$ForecastMetaDataImpl>
+    implements _$$ForecastMetaDataImplCopyWith<$Res> {
+  __$$ForecastMetaDataImplCopyWithImpl(_$ForecastMetaDataImpl _value,
+      $Res Function(_$ForecastMetaDataImpl) _then)
+      : super(_value, _then);
+
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? intervalWidth = freezed,
+    Object? confidenceLevel = freezed,
+    Object? disclaimer = freezed,
+  }) {
+    return _then(_$ForecastMetaDataImpl(
+      intervalWidth: freezed == intervalWidth
+          ? _value.intervalWidth
+          : intervalWidth // ignore: cast_nullable_to_non_nullable
+              as double?,
+      confidenceLevel: freezed == confidenceLevel
+          ? _value.confidenceLevel
+          : confidenceLevel // ignore: cast_nullable_to_non_nullable
+              as double?,
+      disclaimer: freezed == disclaimer
+          ? _value.disclaimer
+          : disclaimer // ignore: cast_nullable_to_non_nullable
+              as String?,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$ForecastMetaDataImpl extends _ForecastMetaData {
+  const _$ForecastMetaDataImpl(
+      {this.intervalWidth, this.confidenceLevel, this.disclaimer})
+      : super._();
+
+  factory _$ForecastMetaDataImpl.fromJson(Map<String, dynamic> json) =>
+      _$$ForecastMetaDataImplFromJson(json);
+
+  @override
+  final double? intervalWidth;
+  @override
+  final double? confidenceLevel;
+  @override
+  final String? disclaimer;
+
+  @override
+  String toString() {
+    return 'ForecastMetaData(intervalWidth: $intervalWidth, confidenceLevel: $confidenceLevel, disclaimer: $disclaimer)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$ForecastMetaDataImpl &&
+            (identical(other.intervalWidth, intervalWidth) ||
+                other.intervalWidth == intervalWidth) &&
+            (identical(other.confidenceLevel, confidenceLevel) ||
+                other.confidenceLevel == confidenceLevel) &&
+            (identical(other.disclaimer, disclaimer) ||
+                other.disclaimer == disclaimer));
+  }
+
+  @JsonKey(ignore: true)
+  @override
+  int get hashCode =>
+      Object.hash(runtimeType, intervalWidth, confidenceLevel, disclaimer);
+
+  @JsonKey(ignore: true)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$ForecastMetaDataImplCopyWith<_$ForecastMetaDataImpl> get copyWith =>
+      __$$ForecastMetaDataImplCopyWithImpl<_$ForecastMetaDataImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$ForecastMetaDataImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _ForecastMetaData extends ForecastMetaData {
+  const factory _ForecastMetaData(
+      {final double? intervalWidth,
+      final double? confidenceLevel,
+      final String? disclaimer}) = _$ForecastMetaDataImpl;
+  const _ForecastMetaData._() : super._();
+
+  factory _ForecastMetaData.fromJson(Map<String, dynamic> json) =
+      _$ForecastMetaDataImpl.fromJson;
+
+  @override
+  double? get intervalWidth;
+  @override
+  double? get confidenceLevel;
+  @override
+  String? get disclaimer;
+  @override
+  @JsonKey(ignore: true)
+  _$$ForecastMetaDataImplCopyWith<_$ForecastMetaDataImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
 

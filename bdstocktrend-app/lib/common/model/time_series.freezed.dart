@@ -18,6 +18,8 @@ final _privateConstructorUsedError = UnsupportedError(
 mixin _$TimeSeries {
   DateTime get time => throw _privateConstructorUsedError;
   double get value => throw _privateConstructorUsedError;
+  double? get low => throw _privateConstructorUsedError;
+  double? get high => throw _privateConstructorUsedError;
 
   @JsonKey(ignore: true)
   $TimeSeriesCopyWith<TimeSeries> get copyWith =>
@@ -30,7 +32,7 @@ abstract class $TimeSeriesCopyWith<$Res> {
           TimeSeries value, $Res Function(TimeSeries) then) =
       _$TimeSeriesCopyWithImpl<$Res, TimeSeries>;
   @useResult
-  $Res call({DateTime time, double value});
+  $Res call({DateTime time, double value, double? low, double? high});
 }
 
 /// @nodoc
@@ -48,6 +50,8 @@ class _$TimeSeriesCopyWithImpl<$Res, $Val extends TimeSeries>
   $Res call({
     Object? time = null,
     Object? value = null,
+    Object? low = freezed,
+    Object? high = freezed,
   }) {
     return _then(_value.copyWith(
       time: null == time
@@ -58,6 +62,14 @@ class _$TimeSeriesCopyWithImpl<$Res, $Val extends TimeSeries>
           ? _value.value
           : value // ignore: cast_nullable_to_non_nullable
               as double,
+      low: freezed == low
+          ? _value.low
+          : low // ignore: cast_nullable_to_non_nullable
+              as double?,
+      high: freezed == high
+          ? _value.high
+          : high // ignore: cast_nullable_to_non_nullable
+              as double?,
     ) as $Val);
   }
 }
@@ -70,7 +82,7 @@ abstract class _$$TimeSeriesImplCopyWith<$Res>
       __$$TimeSeriesImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({DateTime time, double value});
+  $Res call({DateTime time, double value, double? low, double? high});
 }
 
 /// @nodoc
@@ -86,6 +98,8 @@ class __$$TimeSeriesImplCopyWithImpl<$Res>
   $Res call({
     Object? time = null,
     Object? value = null,
+    Object? low = freezed,
+    Object? high = freezed,
   }) {
     return _then(_$TimeSeriesImpl(
       time: null == time
@@ -96,6 +110,14 @@ class __$$TimeSeriesImplCopyWithImpl<$Res>
           ? _value.value
           : value // ignore: cast_nullable_to_non_nullable
               as double,
+      low: freezed == low
+          ? _value.low
+          : low // ignore: cast_nullable_to_non_nullable
+              as double?,
+      high: freezed == high
+          ? _value.high
+          : high // ignore: cast_nullable_to_non_nullable
+              as double?,
     ));
   }
 }
@@ -103,16 +125,21 @@ class __$$TimeSeriesImplCopyWithImpl<$Res>
 /// @nodoc
 
 class _$TimeSeriesImpl implements _TimeSeries {
-  const _$TimeSeriesImpl({required this.time, required this.value});
+  const _$TimeSeriesImpl(
+      {required this.time, required this.value, this.low, this.high});
 
   @override
   final DateTime time;
   @override
   final double value;
+  @override
+  final double? low;
+  @override
+  final double? high;
 
   @override
   String toString() {
-    return 'TimeSeries(time: $time, value: $value)';
+    return 'TimeSeries(time: $time, value: $value, low: $low, high: $high)';
   }
 
   @override
@@ -121,11 +148,13 @@ class _$TimeSeriesImpl implements _TimeSeries {
         (other.runtimeType == runtimeType &&
             other is _$TimeSeriesImpl &&
             (identical(other.time, time) || other.time == time) &&
-            (identical(other.value, value) || other.value == value));
+            (identical(other.value, value) || other.value == value) &&
+            (identical(other.low, low) || other.low == low) &&
+            (identical(other.high, high) || other.high == high));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, time, value);
+  int get hashCode => Object.hash(runtimeType, time, value, low, high);
 
   @JsonKey(ignore: true)
   @override
@@ -137,12 +166,18 @@ class _$TimeSeriesImpl implements _TimeSeries {
 abstract class _TimeSeries implements TimeSeries {
   const factory _TimeSeries(
       {required final DateTime time,
-      required final double value}) = _$TimeSeriesImpl;
+      required final double value,
+      final double? low,
+      final double? high}) = _$TimeSeriesImpl;
 
   @override
   DateTime get time;
   @override
   double get value;
+  @override
+  double? get low;
+  @override
+  double? get high;
   @override
   @JsonKey(ignore: true)
   _$$TimeSeriesImplCopyWith<_$TimeSeriesImpl> get copyWith =>

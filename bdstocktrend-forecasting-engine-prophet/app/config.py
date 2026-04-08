@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,8 +15,14 @@ class Settings(BaseSettings):
     database_url: str | None = Field(default=None, validation_alias="DATABASE_URL")
     db_host: str | None = Field(default=None, validation_alias="DB_HOST")
     db_port: int = Field(default=5432, validation_alias="DB_PORT")
-    db_name: str | None = Field(default=None, validation_alias="DB_NAME")
-    db_user: str | None = Field(default=None, validation_alias="DB_USER")
+    db_name: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DB_NAME", "DB_DATABASE"),
+    )
+    db_user: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DB_USER", "DB_USERNAME"),
+    )
     db_password: str | None = Field(default=None, validation_alias="DB_PASSWORD")
 
     # Forecast
