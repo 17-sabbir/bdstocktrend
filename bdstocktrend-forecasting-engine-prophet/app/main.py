@@ -3,49 +3,119 @@ from __future__ import annotations
 import logging
 import time
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
+logger.info("Loading app.main module...")
 
 from app.config import settings
+logger.info(f"Config loaded. Database: {settings.db_name}, User: {settings.db_user}")
+
 from app.db import close_db, init_db
 from app.modeling import forecast_next_days, list_codes, schedule_training
 
+logger.info("All dependencies imported successfully")
 
-app = FastAPI(title=settings.app_name, version=settings.app_version)
+
+app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=None)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Minimal middleware to detect if requests are even hitting the app
 @app.middleware("http")
-async def log_requests(request: Request, call_next):
-    start_time = time.time()
-    
+async def basic_logging(request: Request, call_next):
+    logger.info(f"===> REQUEST SECURED BY ASGI: {request.method} {request.url.path}")
     response = await call_next(request)
-    
-    process_time = (time.time() - start_time) * 1000
-    formatted_process_time = '{0:.2f}'.format(process_time)
-    
-    logger.info(
-        f"Request: {request.method} {request.url.path} | "
-        f"Status: {response.status_code} | "
-        f"Duration: {formatted_process_time}ms"
-    )
-    
+    logger.info(f"<=== RESPONSE DISPATCHED: {response.status_code}")
     return response
 
 
-@app.on_event("startup")
-def _startup() -> None:
-    init_db()
-
+# Removing startup event because ASGIMiddleware + Passenger might hang on it.
+# We will lazy-initialize DB instead anyway.
 
 @app.on_event("shutdown")
 def _shutdown() -> None:
-    close_db()
+    logger.info("FastAPI SHUTDOWN EVENT triggered")
+    try:
+        close_db()
+        logger.info("Database closed successfully")
+    except Exception:
+        logger.exception("Error during database shutdown")
 
 
 @app.get("/")
-def root() -> str:
-    return f"{settings.app_name} {settings.app_version}"
+def root() -> dict:
+    try:
+        return {
+            "app": settings.app_name,
+            "version": settings.app_version,
+            "status": "running"
+        }
+    except Exception as e:
+        logger.exception("Error in root endpoint")
+        import traceback
+        return {
+            "error": str(e),
+            "type": type(e).__name__,
+            "traceback": traceback.format_exc()
+        }
+
+
+@app.get("/health")
+def health() -> dict:
+    return {
+        "status": "ok",
+        "app": settings.app_name,
+        "version": settings.app_version,
+    }
+
+
+@app.get("/debug")
+def debug_endpoint() -> dict:
+    """Debug endpoint that shows what's happening"""
+    result = {}
+    
+    # Test 1: Basic response
+    result["test_basic"] = "OK"
+    
+    # Test 2: Settings access
+    try:
+        result["settings"] = {
+            "app_name": settings.app_name,
+            "app_version": settings.app_version,
+            "db_host": settings.db_host,
+            "db_name": settings.db_name,
+        }
+    except Exception as e:
+        result["settings_error"] = str(e)
+    
+    # Test 3: DB access
+    try:
+        from app.db import _db
+        if _db is None:
+            result["db_status"] = "DB not initialized"
+        else:
+            result["db_status"] = "DB initialized"
+            result["db_pool"] = str(_db.pool)
+    except Exception as e:
+        result["db_error"] = str(e)
+    
+    # Test 4: Try to import modeling
+    try:
+        from app.modeling import list_codes
+        result["modeling_import"] = "OK"
+        #  Try calling list_codes
+        try:
+            codes = list_codes()
+            result["list_codes"] = f"Success: {len(codes)} codes"
+        except Exception as e:
+            result["list_codes_error"] = str(e)
+    except Exception as e:
+        result["modeling_error"] = str(e)
+    
+    return result
 
 
 @app.get("/sync")

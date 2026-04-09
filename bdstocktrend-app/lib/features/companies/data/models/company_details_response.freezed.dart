@@ -280,195 +280,6 @@ abstract class _CompanyDetailsResponse extends CompanyDetailsResponse {
       get copyWith => throw _privateConstructorUsedError;
 }
 
-TimeSeriesData _$TimeSeriesDataFromJson(Map<String, dynamic> json) {
-  return _TimeSeriesData.fromJson(json);
-}
-
-/// @nodoc
-mixin _$TimeSeriesData {
-  DateTime? get time => throw _privateConstructorUsedError;
-  double? get value => throw _privateConstructorUsedError;
-  double? get low => throw _privateConstructorUsedError;
-  double? get high => throw _privateConstructorUsedError;
-
-  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
-  @JsonKey(ignore: true)
-  $TimeSeriesDataCopyWith<TimeSeriesData> get copyWith =>
-      throw _privateConstructorUsedError;
-}
-
-/// @nodoc
-abstract class $TimeSeriesDataCopyWith<$Res> {
-  factory $TimeSeriesDataCopyWith(
-          TimeSeriesData value, $Res Function(TimeSeriesData) then) =
-      _$TimeSeriesDataCopyWithImpl<$Res, TimeSeriesData>;
-  @useResult
-  $Res call({DateTime? time, double? value, double? low, double? high});
-}
-
-/// @nodoc
-class _$TimeSeriesDataCopyWithImpl<$Res, $Val extends TimeSeriesData>
-    implements $TimeSeriesDataCopyWith<$Res> {
-  _$TimeSeriesDataCopyWithImpl(this._value, this._then);
-
-  // ignore: unused_field
-  final $Val _value;
-  // ignore: unused_field
-  final $Res Function($Val) _then;
-
-  @pragma('vm:prefer-inline')
-  @override
-  $Res call({
-    Object? time = freezed,
-    Object? value = freezed,
-    Object? low = freezed,
-    Object? high = freezed,
-  }) {
-    return _then(_value.copyWith(
-      time: freezed == time
-          ? _value.time
-          : time // ignore: cast_nullable_to_non_nullable
-              as DateTime?,
-      value: freezed == value
-          ? _value.value
-          : value // ignore: cast_nullable_to_non_nullable
-              as double?,
-      low: freezed == low
-          ? _value.low
-          : low // ignore: cast_nullable_to_non_nullable
-              as double?,
-      high: freezed == high
-          ? _value.high
-          : high // ignore: cast_nullable_to_non_nullable
-              as double?,
-    ) as $Val);
-  }
-}
-
-/// @nodoc
-abstract class _$$TimeSeriesDataImplCopyWith<$Res>
-    implements $TimeSeriesDataCopyWith<$Res> {
-  factory _$$TimeSeriesDataImplCopyWith(_$TimeSeriesDataImpl value,
-          $Res Function(_$TimeSeriesDataImpl) then) =
-      __$$TimeSeriesDataImplCopyWithImpl<$Res>;
-  @override
-  @useResult
-  $Res call({DateTime? time, double? value, double? low, double? high});
-}
-
-/// @nodoc
-class __$$TimeSeriesDataImplCopyWithImpl<$Res>
-    extends _$TimeSeriesDataCopyWithImpl<$Res, _$TimeSeriesDataImpl>
-    implements _$$TimeSeriesDataImplCopyWith<$Res> {
-  __$$TimeSeriesDataImplCopyWithImpl(
-      _$TimeSeriesDataImpl _value, $Res Function(_$TimeSeriesDataImpl) _then)
-      : super(_value, _then);
-
-  @pragma('vm:prefer-inline')
-  @override
-  $Res call({
-    Object? time = freezed,
-    Object? value = freezed,
-    Object? low = freezed,
-    Object? high = freezed,
-  }) {
-    return _then(_$TimeSeriesDataImpl(
-      time: freezed == time
-          ? _value.time
-          : time // ignore: cast_nullable_to_non_nullable
-              as DateTime?,
-      value: freezed == value
-          ? _value.value
-          : value // ignore: cast_nullable_to_non_nullable
-              as double?,
-      low: freezed == low
-          ? _value.low
-          : low // ignore: cast_nullable_to_non_nullable
-              as double?,
-      high: freezed == high
-          ? _value.high
-          : high // ignore: cast_nullable_to_non_nullable
-              as double?,
-    ));
-  }
-}
-
-/// @nodoc
-@JsonSerializable()
-class _$TimeSeriesDataImpl implements _TimeSeriesData {
-  const _$TimeSeriesDataImpl({this.time, this.value, this.low, this.high});
-
-  factory _$TimeSeriesDataImpl.fromJson(Map<String, dynamic> json) =>
-      _$$TimeSeriesDataImplFromJson(json);
-
-  @override
-  final DateTime? time;
-  @override
-  final double? value;
-  @override
-  final double? low;
-  @override
-  final double? high;
-
-  @override
-  String toString() {
-    return 'TimeSeriesData(time: $time, value: $value, low: $low, high: $high)';
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is _$TimeSeriesDataImpl &&
-            (identical(other.time, time) || other.time == time) &&
-            (identical(other.value, value) || other.value == value) &&
-            (identical(other.low, low) || other.low == low) &&
-            (identical(other.high, high) || other.high == high));
-  }
-
-  @JsonKey(ignore: true)
-  @override
-  int get hashCode => Object.hash(runtimeType, time, value, low, high);
-
-  @JsonKey(ignore: true)
-  @override
-  @pragma('vm:prefer-inline')
-  _$$TimeSeriesDataImplCopyWith<_$TimeSeriesDataImpl> get copyWith =>
-      __$$TimeSeriesDataImplCopyWithImpl<_$TimeSeriesDataImpl>(
-          this, _$identity);
-
-  @override
-  Map<String, dynamic> toJson() {
-    return _$$TimeSeriesDataImplToJson(
-      this,
-    );
-  }
-}
-
-abstract class _TimeSeriesData implements TimeSeriesData {
-  const factory _TimeSeriesData(
-      {final DateTime? time,
-      final double? value,
-      final double? low,
-      final double? high}) = _$TimeSeriesDataImpl;
-
-  factory _TimeSeriesData.fromJson(Map<String, dynamic> json) =
-      _$TimeSeriesDataImpl.fromJson;
-
-  @override
-  DateTime? get time;
-  @override
-  double? get value;
-  @override
-  double? get low;
-  @override
-  double? get high;
-  @override
-  @JsonKey(ignore: true)
-  _$$TimeSeriesDataImplCopyWith<_$TimeSeriesDataImpl> get copyWith =>
-      throw _privateConstructorUsedError;
-}
-
 ForecastMetaData _$ForecastMetaDataFromJson(Map<String, dynamic> json) {
   return _ForecastMetaData.fromJson(json);
 }
@@ -647,6 +458,160 @@ abstract class _ForecastMetaData extends ForecastMetaData {
   @override
   @JsonKey(ignore: true)
   _$$ForecastMetaDataImplCopyWith<_$ForecastMetaDataImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+TimeSeriesData _$TimeSeriesDataFromJson(Map<String, dynamic> json) {
+  return _TimeSeriesData.fromJson(json);
+}
+
+/// @nodoc
+mixin _$TimeSeriesData {
+  DateTime? get time => throw _privateConstructorUsedError;
+  double? get value => throw _privateConstructorUsedError;
+
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+  @JsonKey(ignore: true)
+  $TimeSeriesDataCopyWith<TimeSeriesData> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $TimeSeriesDataCopyWith<$Res> {
+  factory $TimeSeriesDataCopyWith(
+          TimeSeriesData value, $Res Function(TimeSeriesData) then) =
+      _$TimeSeriesDataCopyWithImpl<$Res, TimeSeriesData>;
+  @useResult
+  $Res call({DateTime? time, double? value});
+}
+
+/// @nodoc
+class _$TimeSeriesDataCopyWithImpl<$Res, $Val extends TimeSeriesData>
+    implements $TimeSeriesDataCopyWith<$Res> {
+  _$TimeSeriesDataCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? time = freezed,
+    Object? value = freezed,
+  }) {
+    return _then(_value.copyWith(
+      time: freezed == time
+          ? _value.time
+          : time // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+      value: freezed == value
+          ? _value.value
+          : value // ignore: cast_nullable_to_non_nullable
+              as double?,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$TimeSeriesDataImplCopyWith<$Res>
+    implements $TimeSeriesDataCopyWith<$Res> {
+  factory _$$TimeSeriesDataImplCopyWith(_$TimeSeriesDataImpl value,
+          $Res Function(_$TimeSeriesDataImpl) then) =
+      __$$TimeSeriesDataImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({DateTime? time, double? value});
+}
+
+/// @nodoc
+class __$$TimeSeriesDataImplCopyWithImpl<$Res>
+    extends _$TimeSeriesDataCopyWithImpl<$Res, _$TimeSeriesDataImpl>
+    implements _$$TimeSeriesDataImplCopyWith<$Res> {
+  __$$TimeSeriesDataImplCopyWithImpl(
+      _$TimeSeriesDataImpl _value, $Res Function(_$TimeSeriesDataImpl) _then)
+      : super(_value, _then);
+
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? time = freezed,
+    Object? value = freezed,
+  }) {
+    return _then(_$TimeSeriesDataImpl(
+      time: freezed == time
+          ? _value.time
+          : time // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+      value: freezed == value
+          ? _value.value
+          : value // ignore: cast_nullable_to_non_nullable
+              as double?,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$TimeSeriesDataImpl implements _TimeSeriesData {
+  const _$TimeSeriesDataImpl({this.time, this.value});
+
+  factory _$TimeSeriesDataImpl.fromJson(Map<String, dynamic> json) =>
+      _$$TimeSeriesDataImplFromJson(json);
+
+  @override
+  final DateTime? time;
+  @override
+  final double? value;
+
+  @override
+  String toString() {
+    return 'TimeSeriesData(time: $time, value: $value)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$TimeSeriesDataImpl &&
+            (identical(other.time, time) || other.time == time) &&
+            (identical(other.value, value) || other.value == value));
+  }
+
+  @JsonKey(ignore: true)
+  @override
+  int get hashCode => Object.hash(runtimeType, time, value);
+
+  @JsonKey(ignore: true)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$TimeSeriesDataImplCopyWith<_$TimeSeriesDataImpl> get copyWith =>
+      __$$TimeSeriesDataImplCopyWithImpl<_$TimeSeriesDataImpl>(
+          this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$TimeSeriesDataImplToJson(
+      this,
+    );
+  }
+}
+
+abstract class _TimeSeriesData implements TimeSeriesData {
+  const factory _TimeSeriesData({final DateTime? time, final double? value}) =
+      _$TimeSeriesDataImpl;
+
+  factory _TimeSeriesData.fromJson(Map<String, dynamic> json) =
+      _$TimeSeriesDataImpl.fromJson;
+
+  @override
+  DateTime? get time;
+  @override
+  double? get value;
+  @override
+  @JsonKey(ignore: true)
+  _$$TimeSeriesDataImplCopyWith<_$TimeSeriesDataImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
 

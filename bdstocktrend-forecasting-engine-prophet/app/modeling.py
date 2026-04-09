@@ -281,7 +281,9 @@ def forecast_next_days(code: str) -> list[dict[str, Any]]:
     forecast = model.predict(future)
 
     # Output: list of predictions with code/date/high/low/close
+    # Defensive: ensure unique dates (some downstream consumers assume one row per day).
     out: list[dict[str, Any]] = []
+    seen_dates: set[str] = set()
     for _, row in forecast.iterrows():
         ds = pd.to_datetime(row["ds"]).date().isoformat()
         yhat = float(row["yhat"]) if pd.notna(row["yhat"]) else None
@@ -290,6 +292,10 @@ def forecast_next_days(code: str) -> list[dict[str, Any]]:
 
         if yhat is None:
             continue
+
+        if ds in seen_dates:
+            continue
+        seen_dates.add(ds)
 
         out.append(
             {

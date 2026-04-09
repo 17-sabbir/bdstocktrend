@@ -9,9 +9,18 @@ class CompanyDetails with _$CompanyDetails {
     required ScripDetailsInfo info,
     required List<TimeSeries> last30Days,
     required List<TimeSeries> next30Days,
+    ForecastMeta? forecastMeta,
   }) = _CompanyDetails;
 }
 
+@freezed
+class ForecastMeta with _$ForecastMeta {
+  const factory ForecastMeta({
+    double? intervalWidth,
+    double? confidenceLevel,
+    String? disclaimer,
+  }) = _ForecastMeta;
+}
 
 @freezed
 class ScripDetailsInfo with _$ScripDetailsInfo {

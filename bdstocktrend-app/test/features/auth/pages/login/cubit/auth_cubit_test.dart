@@ -90,7 +90,3 @@ void main() {
     ],
   );
 }
-
-class MockUpdateProfile extends Mock implements UpdateProfile {}
-
-class MockChangePassword extends Mock implements ChangePassword {}

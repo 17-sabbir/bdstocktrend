@@ -1,11 +1,37 @@
 from __future__ import annotations
 
+import logging
+import os
+from pathlib import Path
+
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+logger = logging.getLogger(__name__)
+
+# Try to get project root from environment (set by passenger_wsgi.py)
+# Fall back to path resolution if not set.
+if "APP_ROOT" in os.environ:
+    _PROJECT_ROOT = Path(os.environ["APP_ROOT"])
+    logger.info(f"Using APP_ROOT from environment: {_PROJECT_ROOT}")
+else:
+    _PROJECT_ROOT = Path(__file__).resolve().parents[1]
+    logger.info(f"Using fallback project root: {_PROJECT_ROOT}")
+
+_ENV_FILE = _PROJECT_ROOT / ".env"
+logger.info(f"Looking for .env file at: {_ENV_FILE}")
+logger.info(f".env file exists: {_ENV_FILE.exists()}")
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # Use an absolute path so `.env` loads reliably under Passenger/cPanel,
+    # where the working directory may not be the project root.
+    model_config = SettingsConfigDict(
+        env_file=str(_ENV_FILE),
+        extra="ignore",
+        # Avoid warnings for fields like `model_dir` that start with "model_".
+        protected_namespaces=("settings_",),
+    )
 
     # Server
     app_name: str = "bdstocktrend-prophet-engine"

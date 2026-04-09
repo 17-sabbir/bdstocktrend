@@ -33,24 +33,6 @@ Map<String, dynamic> _$$CompanyDetailsResponseImplToJson(
       'forecastMeta': instance.forecastMeta?.toJson(),
     };
 
-_$TimeSeriesDataImpl _$$TimeSeriesDataImplFromJson(Map<String, dynamic> json) =>
-    _$TimeSeriesDataImpl(
-      time:
-          json['time'] == null ? null : DateTime.parse(json['time'] as String),
-      value: (json['value'] as num?)?.toDouble(),
-      low: (json['low'] as num?)?.toDouble(),
-      high: (json['high'] as num?)?.toDouble(),
-    );
-
-Map<String, dynamic> _$$TimeSeriesDataImplToJson(
-        _$TimeSeriesDataImpl instance) =>
-    <String, dynamic>{
-      'time': instance.time?.toIso8601String(),
-      'value': instance.value,
-      'low': instance.low,
-      'high': instance.high,
-    };
-
 _$ForecastMetaDataImpl _$$ForecastMetaDataImplFromJson(
         Map<String, dynamic> json) =>
     _$ForecastMetaDataImpl(
@@ -65,6 +47,20 @@ Map<String, dynamic> _$$ForecastMetaDataImplToJson(
       'intervalWidth': instance.intervalWidth,
       'confidenceLevel': instance.confidenceLevel,
       'disclaimer': instance.disclaimer,
+    };
+
+_$TimeSeriesDataImpl _$$TimeSeriesDataImplFromJson(Map<String, dynamic> json) =>
+    _$TimeSeriesDataImpl(
+      time:
+          json['time'] == null ? null : DateTime.parse(json['time'] as String),
+      value: (json['value'] as num?)?.toDouble(),
+    );
+
+Map<String, dynamic> _$$TimeSeriesDataImplToJson(
+        _$TimeSeriesDataImpl instance) =>
+    <String, dynamic>{
+      'time': instance.time?.toIso8601String(),
+      'value': instance.value,
     };
 
 _$ScripDetailsInfoDataImpl _$$ScripDetailsInfoDataImplFromJson(

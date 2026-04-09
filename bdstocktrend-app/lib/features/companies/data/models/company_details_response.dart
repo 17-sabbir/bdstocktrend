@@ -12,6 +12,7 @@ class CompanyDetailsResponse with _$CompanyDetailsResponse {
     ScripDetailsInfoData? info,
     List<TimeSeriesData>? last30Days,
     List<TimeSeriesData>? next30Days,
+    ForecastMetaData? forecastMeta,
   }) = _CompanyDetailsResponse;
 
   const CompanyDetailsResponse._();
@@ -42,6 +43,29 @@ class CompanyDetailsResponse with _$CompanyDetailsResponse {
       info: info!.toEntity(),
       last30Days: last30DaysList,
       next30Days: next30DaysList,
+      forecastMeta: forecastMeta?.toEntity(),
+    );
+  }
+}
+
+@freezed
+class ForecastMetaData with _$ForecastMetaData {
+  const factory ForecastMetaData({
+    double? intervalWidth,
+    double? confidenceLevel,
+    String? disclaimer,
+  }) = _ForecastMetaData;
+
+  const ForecastMetaData._();
+
+  factory ForecastMetaData.fromJson(Map<String, dynamic> json) =>
+      _$ForecastMetaDataFromJson(json);
+
+  ForecastMeta toEntity() {
+    return ForecastMeta(
+      intervalWidth: intervalWidth,
+      confidenceLevel: confidenceLevel,
+      disclaimer: disclaimer,
     );
   }
 }
