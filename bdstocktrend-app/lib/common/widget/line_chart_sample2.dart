@@ -2,6 +2,7 @@ import 'package:bd_stock_trend/common/model/time_series.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'dart:math' as math;
 
 class LineChartSample2 extends StatefulWidget {
   final List<TimeSeries> data;
@@ -105,26 +106,26 @@ class _LineChartSample2State extends State<LineChartSample2> {
       getTitlesWidget: (value, meta) {
         final DateTime date =
             DateTime.fromMillisecondsSinceEpoch(value.toInt());
-        final time = DateFormat('hh:mm').format(date);
-
-        if (value == meta.max || value == meta.min) {
-          return Container();
-        }
+        final time = DateFormat('dd/MM').format(date);
 
         return SideTitleWidget(
           meta: meta,
           space: 6,
-          child: Text(
-            time,
-            style: const TextStyle(
-              color: Colors.white54,
-              fontSize: 14,
+          child: Transform.rotate(
+            angle: -math.pi / 4,
+            child: Text(
+              time,
+              style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 10,
+              ),
             ),
           ),
         );
       },
-      reservedSize: 40,
-      interval: 3600000,
+      reservedSize: 36,
+      // Daily stock data: show roughly every 5 days to prevent label overlap.
+      interval: 3600000 * 24 * 5,
     );
   }
 

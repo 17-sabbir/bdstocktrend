@@ -51,7 +51,7 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage>
 
   Widget _success(CompanyDetails data) {
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final chartHeight = (screenWidth / 1.70) + 80;
+    final chartHeight = (screenWidth / 1.70) + 140;
 
     return SingleChildScrollView(
       child: Padding(

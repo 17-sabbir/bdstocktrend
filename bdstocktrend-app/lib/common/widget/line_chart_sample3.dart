@@ -2,6 +2,7 @@ import 'package:bd_stock_trend/common/model/time_series.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'dart:math' as math;
 
 class LineChartSample3 extends StatefulWidget {
   final List<TimeSeries> data;
@@ -18,7 +19,6 @@ class _LineChartSample3State extends State<LineChartSample3> {
     Colors.green,
   ];
 
-  final int _divider = 25;
   final int _leftLabelsCount = 5;
 
   List<FlSpot> _values = const [];
@@ -28,6 +28,66 @@ class _LineChartSample3State extends State<LineChartSample3> {
   double _minY = 0;
   double _maxY = 0;
   double _leftTitlesInterval = 0;
+  int _leftTitlesDecimals = 0;
+
+  double _niceInterval(double rawInterval) {
+    if (rawInterval <= 0 || rawInterval.isNaN || rawInterval.isInfinite) {
+      return 1;
+    }
+
+    final exponent = (math.log(rawInterval) / math.ln10).floor();
+    final pow10 = math.pow(10, exponent).toDouble();
+    final fraction = rawInterval / pow10;
+
+    double niceFraction;
+    if (fraction <= 1) {
+      niceFraction = 1;
+    } else if (fraction <= 2) {
+      niceFraction = 2;
+    } else if (fraction <= 5) {
+      niceFraction = 5;
+    } else {
+      niceFraction = 10;
+    }
+
+    return niceFraction * pow10;
+  }
+
+  void _applyYAxisBounds({required double dataMinY, required double dataMaxY}) {
+    final safeMin = dataMinY.isFinite ? dataMinY : 0;
+    final safeMax = dataMaxY.isFinite ? dataMaxY : 0;
+    final base = math.max(math.max(safeMin.abs(), safeMax.abs()), 1.0);
+    final range = (safeMax - safeMin).abs();
+
+    final padding = range == 0
+        ? base * 0.05
+        : math.max(math.max(range * 0.10, base * 0.005), 0.01);
+
+    var minY = safeMin - padding;
+    var maxY = safeMax + padding;
+
+    final rawInterval = (maxY - minY) / (_leftLabelsCount - 1);
+    final interval = _niceInterval(rawInterval);
+
+    minY = (minY / interval).floorToDouble() * interval;
+    maxY = (maxY / interval).ceilToDouble() * interval;
+
+    if (minY == maxY) {
+      maxY = minY + interval;
+    }
+
+    int decimals = 0;
+    var tmp = interval;
+    while (tmp < 1 && decimals < 4) {
+      tmp *= 10;
+      decimals++;
+    }
+
+    _minY = minY;
+    _maxY = maxY;
+    _leftTitlesInterval = interval;
+    _leftTitlesDecimals = decimals;
+  }
 
   @override
   void initState() {
@@ -51,6 +111,7 @@ class _LineChartSample3State extends State<LineChartSample3> {
       _minY = 0;
       _maxY = 1;
       _leftTitlesInterval = 1;
+      _leftTitlesDecimals = 0;
       setState(() {});
       return;
     }
@@ -69,35 +130,47 @@ class _LineChartSample3State extends State<LineChartSample3> {
 
     _minX = _values.first.x;
     _maxX = _values.last.x;
-    _minY = (minY / _divider).floorToDouble() * _divider;
-    _maxY = (maxY / _divider).ceilToDouble() * _divider;
-    _leftTitlesInterval =
-        ((_maxY - _minY) / (_leftLabelsCount - 1)).floorToDouble();
+    _applyYAxisBounds(dataMinY: minY, dataMaxY: maxY);
 
     setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: <Widget>[
-        AspectRatio(
-          aspectRatio: 1.70,
-          child: Padding(
-            padding: const EdgeInsets.only(
-              right: 18,
-              left: 12,
-              top: 24,
-              bottom: 12,
-            ),
-            child: LineChart(
-              mainData(),
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.bounceIn,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final pointsCount = _values.length;
+        final desiredWidth = math.max(constraints.maxWidth, pointsCount * 28.0);
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          clipBehavior: Clip.hardEdge,
+          child: SizedBox(
+            width: desiredWidth,
+            height: constraints.maxHeight,
+            child: Padding(
+              padding: const EdgeInsets.only(
+                right: 18,
+                left: 12,
+                top: 24,
+                bottom: 12,
+              ),
+              child: InteractiveViewer(
+                panEnabled: false,
+                scaleEnabled: true,
+                minScale: 1,
+                maxScale: 3,
+                child: LineChart(
+                  mainData(),
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.bounceIn,
+                ),
+              ),
             ),
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -139,7 +212,7 @@ class _LineChartSample3State extends State<LineChartSample3> {
         }
 
         return Text(
-          value.floor().toString(),
+          value.toStringAsFixed(_leftTitlesDecimals),
           style: const TextStyle(
             color: Colors.white54,
             fontSize: 14,
@@ -170,6 +243,7 @@ class _LineChartSample3State extends State<LineChartSample3> {
 
   LineChartData mainData() {
     return LineChartData(
+      clipData: const FlClipData.all(),
       gridData: gridData(),
       titlesData: FlTitlesData(
         show: true,
@@ -213,6 +287,7 @@ class _LineChartSample3State extends State<LineChartSample3> {
         touchTooltipData: LineTouchTooltipData(
           fitInsideHorizontally: true,
           fitInsideVertically: true,
+          maxContentWidth: 160,
           tooltipPadding: const EdgeInsets.all(8),
           tooltipMargin: 8,
           getTooltipItems: (List<LineBarSpot> touchedSpots) {
@@ -222,7 +297,7 @@ class _LineChartSample3State extends State<LineChartSample3> {
               );
               final value = touchedSpot.y;
               return LineTooltipItem(
-                '${DateFormat('EEE MMM dd').format(time)}\nPrice: ${value.toStringAsFixed(4)}',
+                '${DateFormat('dd/MM').format(time)}\nPrice: ${value.toStringAsFixed(4)}',
                 const TextStyle(color: Colors.white),
               );
             }).toList();

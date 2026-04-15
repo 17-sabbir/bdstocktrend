@@ -27,7 +27,6 @@ class _LineChartSample4State extends State<LineChartSample4> {
     Colors.red,
   ];
 
-  final int _divider = 25;
   final int _leftLabelsCount = 5;
 
   List<FlSpot> _values1 = const [];
@@ -38,6 +37,65 @@ class _LineChartSample4State extends State<LineChartSample4> {
   double _minY = 0;
   double _maxY = 0;
   double _leftTitlesInterval = 0;
+  int _leftTitlesDecimals = 0;
+
+  double _niceInterval(double rawInterval) {
+    if (rawInterval <= 0 || rawInterval.isNaN || rawInterval.isInfinite) {
+      return 1;
+    }
+
+    final exponent = (log(rawInterval) / ln10).floor();
+    final pow10 = pow(10, exponent).toDouble();
+    final fraction = rawInterval / pow10;
+
+    double niceFraction;
+    if (fraction <= 1) {
+      niceFraction = 1;
+    } else if (fraction <= 2) {
+      niceFraction = 2;
+    } else if (fraction <= 5) {
+      niceFraction = 5;
+    } else {
+      niceFraction = 10;
+    }
+
+    return niceFraction * pow10;
+  }
+
+  void _applyYAxisBounds({required double dataMinY, required double dataMaxY}) {
+    final safeMin = dataMinY.isFinite ? dataMinY : 0;
+    final safeMax = dataMaxY.isFinite ? dataMaxY : 0;
+    final base = max(max(safeMin.abs(), safeMax.abs()), 1.0);
+    final range = (safeMax - safeMin).abs();
+
+    final padding =
+        range == 0 ? base * 0.05 : max(max(range * 0.10, base * 0.005), 0.01);
+
+    var minY = safeMin - padding;
+    var maxY = safeMax + padding;
+
+    final rawInterval = (maxY - minY) / (_leftLabelsCount - 1);
+    final interval = _niceInterval(rawInterval);
+
+    minY = (minY / interval).floorToDouble() * interval;
+    maxY = (maxY / interval).ceilToDouble() * interval;
+
+    if (minY == maxY) {
+      maxY = minY + interval;
+    }
+
+    int decimals = 0;
+    var tmp = interval;
+    while (tmp < 1 && decimals < 4) {
+      tmp *= 10;
+      decimals++;
+    }
+
+    _minY = minY;
+    _maxY = maxY;
+    _leftTitlesInterval = interval;
+    _leftTitlesDecimals = decimals;
+  }
 
   @override
   void initState() {
@@ -63,6 +121,7 @@ class _LineChartSample4State extends State<LineChartSample4> {
       _minY = 0;
       _maxY = 1;
       _leftTitlesInterval = 1;
+      _leftTitlesDecimals = 0;
       setState(() {});
       return;
     }
@@ -101,35 +160,47 @@ class _LineChartSample4State extends State<LineChartSample4> {
 
     _minX = min(_values1.first.x, _values2.first.x);
     _maxX = max(_values1.last.x, _values2.last.x);
-    _minY = (minY / _divider).floorToDouble() * _divider;
-    _maxY = (maxY / _divider).ceilToDouble() * _divider;
-    _leftTitlesInterval =
-        ((_maxY - _minY) / (_leftLabelsCount - 1)).floorToDouble();
+    _applyYAxisBounds(dataMinY: minY, dataMaxY: maxY);
 
     setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: <Widget>[
-        AspectRatio(
-          aspectRatio: 1.70,
-          child: Padding(
-            padding: const EdgeInsets.only(
-              right: 18,
-              left: 12,
-              top: 24,
-              bottom: 12,
-            ),
-            child: LineChart(
-              mainData(),
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.linearToEaseOut,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final pointsCount = max(_values1.length, _values2.length);
+        final desiredWidth = math.max(constraints.maxWidth, pointsCount * 28.0);
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          clipBehavior: Clip.hardEdge,
+          child: SizedBox(
+            width: desiredWidth,
+            height: constraints.maxHeight,
+            child: Padding(
+              padding: const EdgeInsets.only(
+                right: 18,
+                left: 12,
+                top: 24,
+                bottom: 12,
+              ),
+              child: InteractiveViewer(
+                panEnabled: false,
+                scaleEnabled: true,
+                minScale: 1,
+                maxScale: 3,
+                child: LineChart(
+                  mainData(),
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.linearToEaseOut,
+                ),
+              ),
             ),
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -174,7 +245,7 @@ class _LineChartSample4State extends State<LineChartSample4> {
         }
 
         return Text(
-          value.floor().toString(),
+          value.toStringAsFixed(_leftTitlesDecimals),
           style: const TextStyle(
             color: Colors.white54,
             fontSize: 14,
@@ -211,6 +282,7 @@ class _LineChartSample4State extends State<LineChartSample4> {
 
   LineChartData mainData() {
     return LineChartData(
+      clipData: const FlClipData.all(),
       gridData: gridData(),
       titlesData: FlTitlesData(
         show: true,
@@ -258,19 +330,41 @@ class _LineChartSample4State extends State<LineChartSample4> {
         touchTooltipData: LineTouchTooltipData(
           fitInsideHorizontally: true,
           fitInsideVertically: true,
-          tooltipPadding: const EdgeInsets.all(8),
-          tooltipMargin: 8,
+          maxContentWidth: 120,
+          tooltipPadding: const EdgeInsets.all(6),
+          tooltipMargin: 4,
           getTooltipItems: (List<LineBarSpot> touchedSpots) {
-            return touchedSpots.map((LineBarSpot touchedSpot) {
-              final time = DateTime.fromMillisecondsSinceEpoch(
-                touchedSpot.x.toInt(),
-              );
-              final value = touchedSpot.y;
-              return LineTooltipItem(
-                '${DateFormat('EEE MMM dd').format(time)}\nPrice: ${value.toStringAsFixed(2)}',
+            if (touchedSpots.isEmpty) return const [];
+
+            final time = DateTime.fromMillisecondsSinceEpoch(
+              touchedSpots.first.x.toInt(),
+            );
+
+            double? historical;
+            double? forecast;
+            for (final spot in touchedSpots) {
+              if (spot.barIndex == 0) {
+                historical = spot.y;
+              } else if (spot.barIndex == 1) {
+                forecast = spot.y;
+              }
+            }
+
+            final buffer = StringBuffer()
+              ..write(DateFormat('dd/MM').format(time));
+            if (historical != null) {
+              buffer.write('\nH: ${historical.toStringAsFixed(2)}');
+            }
+            if (forecast != null) {
+              buffer.write('\nF: ${forecast.toStringAsFixed(2)}');
+            }
+
+            return [
+              LineTooltipItem(
+                buffer.toString(),
                 const TextStyle(color: Colors.white),
-              );
-            }).toList();
+              ),
+            ];
           },
         ),
         handleBuiltInTouches: true,
