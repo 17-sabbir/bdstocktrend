@@ -193,7 +193,7 @@ class _LineChartSample4State extends State<LineChartSample4> {
                 bottom: 12,
               ),
               child: InteractiveViewer(
-                panEnabled: false,
+                panEnabled: true,
                 scaleEnabled: true,
                 transformationController: _transformationController,
                 minScale: 0.85,
@@ -231,13 +231,13 @@ class _LineChartSample4State extends State<LineChartSample4> {
             angle: -math.pi / 4,
             child: Text(
               time,
-              style: TextStyle(color: labelColor, fontSize: 12),
+              style: TextStyle(color: labelColor, fontSize: 11),
             ),
           ),
         );
       },
       reservedSize: 40,
-      interval: 3600000 * 24 * 15,
+      interval: 3600000 * 24 * 7, // Every 7 days
     );
   }
 

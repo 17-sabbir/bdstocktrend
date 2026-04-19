@@ -172,7 +172,7 @@ class _LineChartSample3State extends State<LineChartSample3> {
                 bottom: 12,
               ),
               child: InteractiveViewer(
-                panEnabled: false,
+                panEnabled: true,
                 scaleEnabled: true,
                 transformationController: _transformationController,
                 minScale: 0.85,
@@ -206,14 +206,17 @@ class _LineChartSample3State extends State<LineChartSample3> {
         return SideTitleWidget(
           meta: meta,
           space: 6,
-          child: Text(
-            time,
-            style: TextStyle(color: labelColor, fontSize: 12),
+          child: Transform.rotate(
+            angle: -math.pi / 4,
+            child: Text(
+              time,
+              style: TextStyle(color: labelColor, fontSize: 11),
+            ),
           ),
         );
       },
       reservedSize: 40,
-      interval: 3600000 * 24 * 15,
+      interval: 3600000 * 24 * 7, // Every 7 days
     );
   }
 
