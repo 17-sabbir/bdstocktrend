@@ -1,7 +1,7 @@
 import 'dart:math';
 
-import "package:flutter/material.dart";
 import 'package:bd_stock_trend/core/core.dart';
+import "package:flutter/material.dart";
 
 class ColorLoader extends StatefulWidget {
   final double radius;

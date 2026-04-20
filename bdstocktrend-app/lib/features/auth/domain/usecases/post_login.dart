@@ -1,6 +1,6 @@
-import 'package:dartz/dartz.dart';
 import 'package:bd_stock_trend/core/core.dart';
 import 'package:bd_stock_trend/features/features.dart';
+import 'package:dartz/dartz.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'post_login.freezed.dart';

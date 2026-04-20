@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:bd_stock_trend/core/core.dart';
 import 'package:bd_stock_trend/features/features.dart';
 import 'package:bd_stock_trend/utils/utils.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 

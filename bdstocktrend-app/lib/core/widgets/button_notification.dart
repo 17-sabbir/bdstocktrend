@@ -48,7 +48,7 @@ class ButtonNotification extends StatelessWidget {
           ],
         ),
       ),
-      onPressed: () async {
+      onPressed: () {
         ///TODO: Go to notifications page
         // context.goTo(AppRoute.notifications);
       },

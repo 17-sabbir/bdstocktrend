@@ -92,7 +92,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       textInputAction: TextInputAction.next,
                       controller: _conName,
                       keyboardType: TextInputType.text,
-                      prefixIcon: Icon(
+                      prefixIcon: const Icon(
                         Icons.person_rounded,
                         color: Palette.primary,
                         size: 20,
@@ -107,7 +107,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       textInputAction: TextInputAction.next,
                       controller: _conUsername,
                       keyboardType: TextInputType.text,
-                      prefixIcon: Icon(
+                      prefixIcon: const Icon(
                         Icons.account_circle_rounded,
                         color: Palette.primary,
                         size: 20,
@@ -122,7 +122,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       textInputAction: TextInputAction.next,
                       controller: _conEmail,
                       keyboardType: TextInputType.emailAddress,
-                      prefixIcon: Icon(
+                      prefixIcon: const Icon(
                         Icons.alternate_email_rounded,
                         color: Palette.primary,
                         size: 20,

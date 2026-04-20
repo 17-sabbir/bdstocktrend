@@ -1,10 +1,10 @@
 import 'package:bd_stock_trend/core/core.dart';
-import 'package:bd_stock_trend/features/features.dart';
-import 'package:bd_stock_trend/utils/utils.dart';
 import 'package:bd_stock_trend/features/auth/domain/usecases/change_password.dart';
 import 'package:bd_stock_trend/features/auth/domain/usecases/change_password_params.dart';
 import 'package:bd_stock_trend/features/auth/domain/usecases/update_profile.dart';
 import 'package:bd_stock_trend/features/auth/domain/usecases/update_profile_params.dart';
+import 'package:bd_stock_trend/features/features.dart';
+import 'package:bd_stock_trend/utils/utils.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 

@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:bd_stock_trend/core/core.dart';
 import 'package:bd_stock_trend/utils/utils.dart';
+import 'package:flutter/material.dart';
 
 
 class Empty extends StatelessWidget {

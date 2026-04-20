@@ -16,7 +16,115 @@ class LineChartSample4 extends StatefulWidget {
   State<LineChartSample4> createState() => _LineChartSample4State();
 }
 
+class _VerticalPointHighlighter2 extends CustomPainter {
+  final List<FlSpot> spots1;
+  final List<FlSpot> spots2;
+  final double minX;
+  final double maxX;
+  final double minY;
+  final double maxY;
+  final int step;
+  final double leftReserved;
+  final double bottomReserved;
+  final Color color;
+  final double strokeWidth;
+  final Color dotFillColor;
+  final Color dotPrimaryStrokeColor;
+  final Color dotSecondaryStrokeColor;
+  final double dotRadius;
+
+  _VerticalPointHighlighter2({
+    required this.spots1,
+    required this.spots2,
+    required this.minX,
+    required this.maxX,
+    required this.minY,
+    required this.maxY,
+    required this.step,
+    required this.leftReserved,
+    required this.bottomReserved,
+    required this.color,
+    required this.strokeWidth,
+    required this.dotFillColor,
+    required this.dotPrimaryStrokeColor,
+    required this.dotSecondaryStrokeColor,
+    required this.dotRadius,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final allSpots = <FlSpot>[];
+    allSpots.addAll(spots1);
+    allSpots.addAll(spots2);
+
+    if (allSpots.isEmpty) return;
+    if (maxX <= minX || maxY <= minY) return;
+
+    final linePaint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.square;
+
+    final fillPaint = Paint()
+      ..color = dotFillColor
+      ..style = PaintingStyle.fill;
+
+    final plotWidth = size.width - leftReserved;
+    final plotHeight = size.height - bottomReserved;
+
+    if (plotWidth <= 0 || plotHeight <= 0) return;
+
+    const double dayInMs = 24 * 60 * 60 * 1000;
+    final seen = <int, FlSpot>{};
+
+    // pick one spot per calendar-day index (prefer spots1 if collision)
+    for (var s in spots1) {
+      final dayIndex = ((s.x - minX) / dayInMs).round();
+      if (dayIndex % step != 0) continue;
+      seen.putIfAbsent(dayIndex, () => s);
+    }
+    for (var s in spots2) {
+      final dayIndex = ((s.x - minX) / dayInMs).round();
+      if (dayIndex % step != 0) continue;
+      seen.putIfAbsent(dayIndex, () => s);
+    }
+
+    for (var entry in seen.entries) {
+      final s = entry.value;
+      final xNorm = (s.x - minX) / (maxX - minX);
+      final px = leftReserved + (xNorm * plotWidth);
+      final yNorm = (maxY - s.y) / (maxY - minY);
+      final py = (yNorm * plotHeight).clamp(0.0, plotHeight);
+
+      // vertical highlight: stop slightly below the dot so the dot's bottom
+      // edge is not overlapped by the highlight line.
+      final endY = (py + dotRadius).clamp(0.0, plotHeight);
+      canvas.drawLine(Offset(px, plotHeight), Offset(px, endY), linePaint);
+
+      // choose stroke color based on which list contained the spot
+      final strokeColor = spots1.any((sp) => sp.x == s.x && sp.y == s.y)
+          ? dotPrimaryStrokeColor
+          : dotSecondaryStrokeColor;
+      final strokePaint = Paint()
+        ..color = strokeColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.3;
+
+      // redraw dot on top
+      canvas.drawCircle(Offset(px, py), dotRadius, fillPaint);
+      canvas.drawCircle(Offset(px, py), dotRadius, strokePaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
 class _LineChartSample4State extends State<LineChartSample4> {
+  static const double _pointSpacing = 20;
+  static const double _dayInMs = 24 * 60 * 60 * 1000;
+
   List<Color> gradientColors1 = [
     Colors.greenAccent,
     Colors.green,
@@ -27,12 +135,11 @@ class _LineChartSample4State extends State<LineChartSample4> {
     Colors.red,
   ];
 
-  final int _leftLabelsCount = 5;
-
   List<FlSpot> _values1 = const [];
   List<FlSpot> _values2 = const [];
 
   double _minX = 0;
+
   double _maxX = 0;
   double _minY = 0;
   double _maxY = 0;
@@ -40,29 +147,8 @@ class _LineChartSample4State extends State<LineChartSample4> {
   int _leftTitlesDecimals = 0;
 
   late final TransformationController _transformationController;
-
-  double _niceInterval(double rawInterval) {
-    if (rawInterval <= 0 || rawInterval.isNaN || rawInterval.isInfinite) {
-      return 1;
-    }
-
-    final exponent = (log(rawInterval) / ln10).floor();
-    final pow10 = pow(10, exponent).toDouble();
-    final fraction = rawInterval / pow10;
-
-    double niceFraction;
-    if (fraction <= 1) {
-      niceFraction = 1;
-    } else if (fraction <= 2) {
-      niceFraction = 2;
-    } else if (fraction <= 5) {
-      niceFraction = 5;
-    } else {
-      niceFraction = 10;
-    }
-
-    return niceFraction * pow10;
-  }
+  late final ScrollController _scrollController;
+  bool _initialScrollApplied = false;
 
   void _applyYAxisBounds({required double dataMinY, required double dataMaxY}) {
     final safeMin = dataMinY.isFinite ? dataMinY : 0;
@@ -76,8 +162,8 @@ class _LineChartSample4State extends State<LineChartSample4> {
     var minY = safeMin - padding;
     var maxY = safeMax + padding;
 
-    final rawInterval = (maxY - minY) / (_leftLabelsCount - 1);
-    final interval = _niceInterval(rawInterval);
+    // Force Y-axis interval to 0.5 as requested
+    const interval = 0.5;
 
     minY = (minY / interval).floorToDouble() * interval;
     maxY = (maxY / interval).ceilToDouble() * interval;
@@ -102,6 +188,7 @@ class _LineChartSample4State extends State<LineChartSample4> {
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController();
     _transformationController = TransformationController(
       Matrix4.identity()..scale(0.9),
     );
@@ -110,6 +197,7 @@ class _LineChartSample4State extends State<LineChartSample4> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _transformationController.dispose();
     super.dispose();
   }
@@ -133,10 +221,10 @@ class _LineChartSample4State extends State<LineChartSample4> {
       _maxY = 1;
       _leftTitlesInterval = 1;
       _leftTitlesDecimals = 0;
+      _initialScrollApplied = false;
       setState(() {});
       return;
     }
-
     double minY = double.maxFinite;
     double maxY = double.minPositive;
 
@@ -158,13 +246,45 @@ class _LineChartSample4State extends State<LineChartSample4> {
       );
     }).toList();
 
-    _values2.insert(0, _values1.last);
+    // join the series so the forecast connects to history
+    if (_values1.isNotEmpty) {
+      _values2.insert(0, _values1.last);
+    }
 
     _minX = min(_values1.first.x, _values2.first.x);
     _maxX = max(_values1.last.x, _values2.last.x);
     _applyYAxisBounds(dataMinY: minY, dataMaxY: maxY);
+    _initialScrollApplied = false;
 
     setState(() {});
+  }
+
+  void _applyInitialScroll({
+    required double desiredWidth,
+    required double viewportWidth,
+  }) {
+    if (_initialScrollApplied || !_scrollController.hasClients) return;
+
+    final maxScroll =
+        (desiredWidth - viewportWidth).clamp(0.0, double.infinity);
+    if (maxScroll <= 0) {
+      _initialScrollApplied = true;
+      return;
+    }
+
+    final span = (_maxX - _minX);
+    if (span <= 0) {
+      _initialScrollApplied = true;
+      return;
+    }
+
+    final focusX = _values1.isNotEmpty ? _values1.last.x : _minX;
+    final ratio = ((focusX - _minX) / span).clamp(0.0, 1.0);
+    final focusPixels = ratio * desiredWidth;
+    final target = (focusPixels - viewportWidth / 2).clamp(0.0, maxScroll);
+
+    _scrollController.jumpTo(target);
+    _initialScrollApplied = true;
   }
 
   @override
@@ -176,9 +296,21 @@ class _LineChartSample4State extends State<LineChartSample4> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final pointsCount = max(_values1.length, _values2.length);
-        final desiredWidth = math.max(constraints.maxWidth, pointsCount * 28.0);
+        final desiredWidth = math.max(
+          constraints.maxWidth,
+          pointsCount * _pointSpacing,
+        );
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _applyInitialScroll(
+            desiredWidth: desiredWidth,
+            viewportWidth: constraints.maxWidth,
+          );
+        });
 
         return SingleChildScrollView(
+          controller: _scrollController,
           scrollDirection: Axis.horizontal,
           physics: const BouncingScrollPhysics(),
           clipBehavior: Clip.hardEdge,
@@ -198,10 +330,37 @@ class _LineChartSample4State extends State<LineChartSample4> {
                 transformationController: _transformationController,
                 minScale: 0.85,
                 maxScale: 3,
-                child: LineChart(
-                  mainData(labelColor: labelColor, gridColor: gridColor),
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.linearToEaseOut,
+                child: Stack(
+                  children: [
+                    LineChart(
+                      mainData(labelColor: labelColor, gridColor: gridColor),
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.linearToEaseOut,
+                    ),
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: CustomPaint(
+                          painter: _VerticalPointHighlighter2(
+                            spots1: _values1,
+                            spots2: _values2,
+                            minX: _minX,
+                            maxX: _maxX,
+                            minY: _minY,
+                            maxY: _maxY,
+                            step: 7,
+                            leftReserved: 44,
+                            bottomReserved: 48,
+                            color: gridColor.withOpacity(0.95),
+                            strokeWidth: 2.0,
+                            dotFillColor: Theme.of(context).colorScheme.surface,
+                            dotPrimaryStrokeColor: gradientColors1.last,
+                            dotSecondaryStrokeColor: gradientColors2.last,
+                            dotRadius: 1.8,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -218,11 +377,14 @@ class _LineChartSample4State extends State<LineChartSample4> {
         final DateTime date =
             DateTime.fromMillisecondsSinceEpoch(value.toInt());
 
-        final time = DateFormat("MMM ''yy").format(date);
-
         if (value == meta.max || value == meta.min) {
           return Container();
         }
+        final tick = ((value - _minX) / _dayInMs).round().abs();
+        // Show label only for every 7th day; hide intermediate day labels
+        if (tick % 7 != 0) return Container();
+
+        final time = DateFormat('dd/MM/yyyy').format(date);
 
         return SideTitleWidget(
           meta: meta,
@@ -236,8 +398,8 @@ class _LineChartSample4State extends State<LineChartSample4> {
           ),
         );
       },
-      reservedSize: 40,
-      interval: 3600000 * 24 * 7, // Every 7 days
+      reservedSize: 48,
+      interval: _dayInMs,
     );
   }
 
@@ -260,10 +422,20 @@ class _LineChartSample4State extends State<LineChartSample4> {
       show: true,
       drawVerticalLine: true,
       getDrawingHorizontalLine: (value) {
-        return FlLine(color: gridColor, strokeWidth: 1);
+        return FlLine(
+          color: gridColor,
+          strokeWidth: 1,
+          dashArray: const [2, 3],
+        );
       },
       getDrawingVerticalLine: (value) {
-        return FlLine(color: gridColor, strokeWidth: 1);
+        // Always draw dashed vertical grid lines here.
+        // Column highlights are drawn by the custom painter instead.
+        return FlLine(
+          color: gridColor,
+          strokeWidth: 1,
+          dashArray: const [2, 3],
+        );
       },
       /*getDrawingVerticalLine: (value) {
         return const FlLine(
@@ -348,7 +520,7 @@ class _LineChartSample4State extends State<LineChartSample4> {
             }
 
             final buffer = StringBuffer()
-              ..write(DateFormat("dd MMM ''yy").format(time));
+              ..write(DateFormat('dd/MM/yyyy').format(time));
             if (historical != null) {
               buffer.write('\nH: ${historical.toStringAsFixed(2)}');
             }
@@ -385,16 +557,11 @@ class _LineChartSample4State extends State<LineChartSample4> {
           isStrokeCapRound: true,
           dotData: FlDotData(
             show: true,
-            checkToShowDot: (spot, barData) {
-              if (_values1.isEmpty) return false;
-              final index = _values1.indexOf(spot);
-              return index == 0 || index == _values1.length - 1;
-            },
             getDotPainter: (spot, percent, bar, spotIndex) {
               return FlDotCirclePainter(
-                radius: 2.2,
+                radius: 1.8,
                 color: Theme.of(context).colorScheme.surface,
-                strokeWidth: 1.6,
+                strokeWidth: 1.3,
                 strokeColor: gradientColors1.last,
               );
             },
@@ -418,17 +585,11 @@ class _LineChartSample4State extends State<LineChartSample4> {
           isStrokeCapRound: true,
           dotData: FlDotData(
             show: true,
-            checkToShowDot: (spot, barData) {
-              if (_values2.isEmpty) return false;
-              final index = _values2.indexOf(spot);
-              // Show first point (join) and last forecast point.
-              return index == 0 || index == _values2.length - 1;
-            },
             getDotPainter: (spot, percent, bar, spotIndex) {
               return FlDotCirclePainter(
-                radius: 2.2,
+                radius: 1.8,
                 color: Theme.of(context).colorScheme.surface,
-                strokeWidth: 1.6,
+                strokeWidth: 1.3,
                 strokeColor: gradientColors2.last,
               );
             },

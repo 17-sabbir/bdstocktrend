@@ -1,6 +1,5 @@
 // ignore_for_file: deprecated_member_use
 
-import 'package:bd_stock_trend/core/app_route.dart';
 import 'package:bd_stock_trend/core/core.dart';
 import 'package:bd_stock_trend/features/general/pages/main/cubit/main_cubit.dart';
 import 'package:bd_stock_trend/utils/services/hive/main_box.dart';
