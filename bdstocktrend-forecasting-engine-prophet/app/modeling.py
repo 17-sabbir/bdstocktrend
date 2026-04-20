@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import shutil
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -24,6 +25,52 @@ class ModelMeta:
     trained_until: date
     trained_at: datetime
     row_count: int
+    strategy: str | None = None
+    validation: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class StrategyConfig:
+    name: str
+    yearly_seasonality: bool
+    weekly_seasonality: bool
+    seasonality_mode: str
+    changepoint_prior_scale: float
+
+
+_STRATEGIES: tuple[StrategyConfig, ...] = (
+    StrategyConfig(
+        name="baseline_additive",
+        yearly_seasonality=True,
+        weekly_seasonality=True,
+        seasonality_mode="additive",
+        changepoint_prior_scale=0.05,
+    ),
+    StrategyConfig(
+        name="conservative_additive",
+        yearly_seasonality=True,
+        weekly_seasonality=True,
+        seasonality_mode="additive",
+        changepoint_prior_scale=0.01,
+    ),
+    StrategyConfig(
+        name="flexible_additive",
+        yearly_seasonality=True,
+        weekly_seasonality=True,
+        seasonality_mode="additive",
+        changepoint_prior_scale=0.20,
+    ),
+    StrategyConfig(
+        name="multiplicative",
+        yearly_seasonality=True,
+        weekly_seasonality=True,
+        seasonality_mode="multiplicative",
+        changepoint_prior_scale=0.10,
+    ),
+)
+
+_MIN_TRAIN_ROWS = 45
+_DEFAULT_BACKTEST_POINTS = 12
 
 
 _executor = ThreadPoolExecutor(max_workers=settings.sync_max_workers)
@@ -149,6 +196,8 @@ def _read_meta(code: str) -> ModelMeta | None:
         trained_until=date.fromisoformat(data["trained_until"]),
         trained_at=datetime.fromisoformat(data["trained_at"]),
         row_count=int(data.get("row_count", 0)),
+        strategy=data.get("strategy"),
+        validation=data.get("validation"),
     )
 
 
@@ -161,11 +210,111 @@ def _write_meta(meta: ModelMeta) -> None:
                 "trained_until": meta.trained_until.isoformat(),
                 "trained_at": meta.trained_at.isoformat(),
                 "row_count": meta.row_count,
+                "strategy": meta.strategy,
+                "validation": meta.validation,
             },
             ensure_ascii=False,
         ),
         encoding="utf-8",
     )
+
+
+def _build_prophet(strategy: StrategyConfig):
+    _ensure_prophet_ready()
+    from prophet import Prophet
+
+    return Prophet(
+        interval_width=settings.interval_width,
+        yearly_seasonality=strategy.yearly_seasonality,
+        weekly_seasonality=strategy.weekly_seasonality,
+        daily_seasonality=False,
+        seasonality_mode=strategy.seasonality_mode,
+        changepoint_prior_scale=strategy.changepoint_prior_scale,
+    )
+
+
+def _safe_mape(actual: float, pred: float) -> float:
+    if actual == 0:
+        return 0.0
+    return abs((actual - pred) / actual) * 100.0
+
+
+def _rolling_backtest(
+    df: pd.DataFrame,
+    strategy: StrategyConfig,
+    points: int,
+) -> dict[str, Any]:
+    n = len(df)
+    points = max(1, min(points, n - _MIN_TRAIN_ROWS))
+    start_idx = n - points
+
+    preds: list[float] = []
+    trues: list[float] = []
+
+    for i in range(start_idx, n):
+        train_df = df.iloc[:i][["ds", "y"]]
+        target_row = df.iloc[i]
+        target_ds = pd.to_datetime(target_row["ds"])
+        target_y = float(target_row["y"])
+
+        if len(train_df) < _MIN_TRAIN_ROWS:
+            continue
+
+        try:
+            model = _build_prophet(strategy)
+            model.fit(train_df)
+            pred_df = model.predict(pd.DataFrame({"ds": [target_ds]}))
+            yhat = float(pred_df.iloc[0]["yhat"])
+        except Exception:
+            continue
+
+        if math.isnan(yhat):
+            continue
+
+        preds.append(yhat)
+        trues.append(target_y)
+
+    if not preds:
+        return {
+            "strategy": strategy.name,
+            "points_used": 0,
+            "mae": None,
+            "rmse": None,
+            "mape": None,
+            "score": float("inf"),
+        }
+
+    err_abs = [abs(a - p) for a, p in zip(trues, preds)]
+    err_sq = [(a - p) ** 2 for a, p in zip(trues, preds)]
+    err_pct = [_safe_mape(a, p) for a, p in zip(trues, preds)]
+
+    mae = float(sum(err_abs) / len(err_abs))
+    rmse = float((sum(err_sq) / len(err_sq)) ** 0.5)
+    mape = float(sum(err_pct) / len(err_pct))
+
+    # Weighted score to balance absolute and percentage errors.
+    score = (0.5 * mae) + (0.3 * rmse) + (0.2 * mape)
+    return {
+        "strategy": strategy.name,
+        "points_used": len(preds),
+        "mae": round(mae, 6),
+        "rmse": round(rmse, 6),
+        "mape": round(mape, 6),
+        "score": round(score, 6),
+    }
+
+
+def _choose_strategy(df: pd.DataFrame) -> tuple[StrategyConfig, list[dict[str, Any]]]:
+    if len(df) < (_MIN_TRAIN_ROWS + 3):
+        # Not enough rows for robust backtesting; choose a conservative default.
+        return _STRATEGIES[0], []
+
+    points = min(_DEFAULT_BACKTEST_POINTS, len(df) - _MIN_TRAIN_ROWS)
+    evaluations = [_rolling_backtest(df, strategy, points) for strategy in _STRATEGIES]
+    ranked = sorted(evaluations, key=lambda item: float(item["score"]))
+    winner_name = ranked[0]["strategy"]
+    winner = next((s for s in _STRATEGIES if s.name == winner_name), _STRATEGIES[0])
+    return winner, ranked
 
 
 def _load_model(code: str) -> Prophet | None:
@@ -187,9 +336,6 @@ def _save_model(code: str, model: Prophet) -> None:
 
 
 def train_model(code: str) -> None:
-    _ensure_prophet_ready()
-    from prophet import Prophet
-
     logger.info(f"[TRAIN_START] Training model for code={code}")
     df = _load_series(code)
     if df.empty or len(df) < 2:
@@ -198,12 +344,10 @@ def train_model(code: str) -> None:
 
     logger.info(f"[TRAIN_DATA] code={code}, historical_data_points={len(df)}, date_range={df['ds'].min()}_to_{df['ds'].max()}")
 
-    model = Prophet(
-        interval_width=settings.interval_width,
-        yearly_seasonality=True,
-        weekly_seasonality=True,
-        daily_seasonality=False,
-    )
+    strategy, evaluations = _choose_strategy(df)
+    logger.info(f"[TRAIN_STRATEGY] code={code}, selected={strategy.name}")
+
+    model = _build_prophet(strategy)
     model.fit(df)
 
     trained_until = df["ds"].max().date()
@@ -214,6 +358,13 @@ def train_model(code: str) -> None:
             trained_until=trained_until,
             trained_at=datetime.utcnow(),
             row_count=len(df),
+            strategy=strategy.name,
+            validation={
+                "selected": strategy.name,
+                "evaluations": evaluations,
+            }
+            if evaluations
+            else None,
         )
     )
     logger.info(f"[TRAIN_DONE] Model trained for code={code}, trained_until={trained_until}")
@@ -347,8 +498,42 @@ def get_model_status(code: str) -> dict[str, Any]:
                 "trained_until": meta.trained_until.isoformat(),
                 "trained_at": meta.trained_at.isoformat(),
                 "row_count": meta.row_count,
+                "strategy": meta.strategy,
+                "validation": meta.validation,
             }
             if meta
             else None
         ),
+    }
+
+
+def evaluate_code(code: str, points: int = _DEFAULT_BACKTEST_POINTS) -> dict[str, Any]:
+    """Evaluate all supported strategies for a code using rolling validation.
+
+    This endpoint-friendly utility lets you test model quality for a company
+    before running production sync/predict.
+    """
+
+    code = (code or "").strip()
+    if not code:
+        raise ValueError("code is required")
+
+    df = _load_series(code)
+    if df.empty:
+        raise ValueError(f"No historical data found for code={code}")
+    if len(df) < (_MIN_TRAIN_ROWS + 3):
+        raise ValueError(
+            f"Not enough data for evaluation for code={code}. "
+            f"Need at least {_MIN_TRAIN_ROWS + 3} rows, got {len(df)}"
+        )
+
+    eval_points = max(1, min(points, len(df) - _MIN_TRAIN_ROWS))
+    evaluations = [_rolling_backtest(df, strategy, eval_points) for strategy in _STRATEGIES]
+    ranked = sorted(evaluations, key=lambda item: float(item["score"]))
+    return {
+        "code": code,
+        "rows": len(df),
+        "points": eval_points,
+        "recommended_strategy": ranked[0]["strategy"] if ranked else None,
+        "evaluations": ranked,
     }

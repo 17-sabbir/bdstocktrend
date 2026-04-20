@@ -12,7 +12,7 @@ from app.config import settings
 logger.info(f"Config loaded. Database: {settings.db_name}, User: {settings.db_user}")
 
 from app.db import close_db, init_db
-from app.modeling import forecast_next_days, get_model_status, list_codes, schedule_training
+from app.modeling import evaluate_code, forecast_next_days, get_model_status, list_codes, schedule_training
 
 logger.info("All dependencies imported successfully")
 
@@ -173,3 +173,21 @@ def meta(code: str) -> dict:
         },
         "status": status,
     }
+
+
+@app.get("/evaluate/{code}")
+def evaluate(code: str, points: int = 12) -> dict:
+    """Run rolling backtest for supported strategies and recommend one.
+
+    Use this endpoint to test a company's historical data quality before
+    production prediction calls.
+    """
+
+    try:
+        result = evaluate_code(code, points=points)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return result

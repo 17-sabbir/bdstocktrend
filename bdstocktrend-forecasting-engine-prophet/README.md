@@ -7,6 +7,7 @@ A drop-in replacement forecasting engine for BDStockTrend that is compatible wit
 - `GET /` -> returns a version string
 - `GET /sync` -> schedules background training and returns `200`
 - `GET /predict/{code}` -> returns:
+- `GET /evaluate/{code}?points=12` -> runs rolling backtest for supported strategies and returns the recommended strategy
 
 ```json
 {
@@ -14,6 +15,26 @@ A drop-in replacement forecasting engine for BDStockTrend that is compatible wit
     {"code": "ABC", "date": "2026-04-05", "high": 123.0, "low": 110.0, "close": 118.0}
   ]
 }
+```
+
+## Strategy Selection
+
+This engine now performs per-company strategy selection during training.
+
+- It evaluates multiple Prophet configurations using rolling backtests on each company's own history.
+- It picks the best strategy based on a weighted score from MAE, RMSE, and MAPE.
+- Chosen strategy and validation results are stored in each model's `meta.json`.
+
+You can test before predicting:
+
+```bash
+curl "http://localhost:8585/evaluate/ACI?points=12"
+```
+
+You can inspect selected strategy:
+
+```bash
+curl "http://localhost:8585/meta/ACI"
 ```
 
 ## Configuration
