@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import pickle
 import shutil
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -27,6 +28,7 @@ class ModelMeta:
     row_count: int
     strategy: str | None = None
     validation: dict[str, Any] | None = None
+    residual_std: float | None = None
 
 
 @dataclass(frozen=True)
@@ -71,6 +73,7 @@ _STRATEGIES: tuple[StrategyConfig, ...] = (
 
 _MIN_TRAIN_ROWS = 45
 _DEFAULT_BACKTEST_POINTS = 12
+_DEFAULT_HOLDOUT_DAYS = 30
 
 
 _executor = ThreadPoolExecutor(max_workers=settings.sync_max_workers)
@@ -148,7 +151,16 @@ def _ensure_prophet_ready() -> None:
 def _model_paths(code: str) -> tuple[Path, Path]:
     model_dir = ensure_model_dir() / code
     model_dir.mkdir(parents=True, exist_ok=True)
+    # - Prophet stores JSON in model.json
+    # - statsmodels-based models store pickle in model.pkl
+    # We keep both names to support migration without breaking existing installs.
     return model_dir / "model.json", model_dir / "meta.json"
+
+
+def _pickle_path(code: str) -> Path:
+    model_dir = ensure_model_dir() / code
+    model_dir.mkdir(parents=True, exist_ok=True)
+    return model_dir / "model.pkl"
 
 
 def _db_max_date(code: str) -> date | None:
@@ -198,6 +210,7 @@ def _read_meta(code: str) -> ModelMeta | None:
         row_count=int(data.get("row_count", 0)),
         strategy=data.get("strategy"),
         validation=data.get("validation"),
+        residual_std=(float(data["residual_std"]) if data.get("residual_std") is not None else None),
     )
 
 
@@ -212,6 +225,7 @@ def _write_meta(meta: ModelMeta) -> None:
                 "row_count": meta.row_count,
                 "strategy": meta.strategy,
                 "validation": meta.validation,
+                "residual_std": meta.residual_std,
             },
             ensure_ascii=False,
         ),
@@ -230,6 +244,253 @@ def _build_prophet(strategy: StrategyConfig):
         daily_seasonality=False,
         seasonality_mode=strategy.seasonality_mode,
         changepoint_prior_scale=strategy.changepoint_prior_scale,
+    )
+
+
+def _rmse(trues: list[float], preds: list[float]) -> float:
+    if not trues:
+        return float("inf")
+    err_sq = [(a - p) ** 2 for a, p in zip(trues, preds)]
+    return float((sum(err_sq) / len(err_sq)) ** 0.5)
+
+
+def _mae(trues: list[float], preds: list[float]) -> float:
+    if not trues:
+        return float("inf")
+    err_abs = [abs(a - p) for a, p in zip(trues, preds)]
+    return float(sum(err_abs) / len(err_abs))
+
+
+def _mape(trues: list[float], preds: list[float]) -> float:
+    if not trues:
+        return float("inf")
+    err_pct = [_safe_mape(a, p) for a, p in zip(trues, preds)]
+    return float(sum(err_pct) / len(err_pct))
+
+
+def _std(values: list[float]) -> float:
+    if len(values) < 2:
+        return 0.0
+    mean = sum(values) / len(values)
+    var = sum((v - mean) ** 2 for v in values) / (len(values) - 1)
+    return float(var ** 0.5)
+
+
+def _pfe(trues: list[float], preds: list[float]) -> float:
+    """Percentage Forecast Error (PFE), approximated.
+
+    The paper defines: PFE = 2 * Sd / Ŷ_{t+1} * 100%.
+
+    For multi-step holdout evaluation, we approximate Ŷ_{t+1} using the mean
+    absolute predicted value over the holdout horizon.
+    """
+
+    if not trues:
+        return float("inf")
+    errors = [a - p for a, p in zip(trues, preds)]
+    sd = _std(errors)
+    denom = float(sum(abs(p) for p in preds) / len(preds)) if preds else 0.0
+    if denom <= 0:
+        return float("inf")
+    return float(2.0 * sd / denom * 100.0)
+
+
+def _default_holdout(df: pd.DataFrame) -> int:
+    # Use last N trading rows as holdout; cap so we always have at least MIN_TRAIN_ROWS.
+    if len(df) <= (_MIN_TRAIN_ROWS + 1):
+        return 0
+    return min(_DEFAULT_HOLDOUT_DAYS, len(df) - _MIN_TRAIN_ROWS)
+
+
+def _split_holdout(df: pd.DataFrame, holdout: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if holdout <= 0:
+        return df, df.iloc[0:0]
+    return df.iloc[:-holdout].copy(), df.iloc[-holdout:].copy()
+
+
+def _eval_metrics(trues: list[float], preds: list[float]) -> dict[str, Any]:
+    if not trues or not preds:
+        return {"rmse": None, "mape": None, "mae": None, "pfe": None, "residual_std": None}
+    errors = [a - p for a, p in zip(trues, preds)]
+    return {
+        "rmse": round(_rmse(trues, preds), 6),
+        "mape": round(_mape(trues, preds), 6),
+        "mae": round(_mae(trues, preds), 6),
+        "pfe": round(_pfe(trues, preds), 6),
+        "residual_std": round(_std(errors), 6),
+    }
+
+
+def _rank_score(metrics: dict[str, Any]) -> float:
+    """Smaller is better. Prioritize RMSE, then MAPE, then PFE."""
+
+    if not metrics or metrics.get("rmse") is None:
+        return float("inf")
+    rmse = float(metrics.get("rmse") or 0.0)
+    mape = float(metrics.get("mape") or 0.0)
+    pfe = float(metrics.get("pfe") or 0.0)
+    # Weighted score (kept simple and stable across companies)
+    return (0.6 * rmse) + (0.3 * mape) + (0.1 * pfe)
+
+
+def _predict_prophet_on_dates(train_df: pd.DataFrame, future_ds: list[pd.Timestamp], strategy: StrategyConfig) -> list[float]:
+    model = _build_prophet(strategy)
+    model.fit(train_df[["ds", "y"]])
+    pred_df = model.predict(pd.DataFrame({"ds": future_ds}))
+    return [float(v) for v in pred_df["yhat"].tolist()]
+
+
+def _fit_prophet_full(df: pd.DataFrame, strategy: StrategyConfig):
+    model = _build_prophet(strategy)
+    model.fit(df[["ds", "y"]])
+    return model
+
+
+def _fit_statsmodels_arima(series: pd.Series):
+    # Lazy import to keep engine lightweight when users only want Prophet.
+    from statsmodels.tsa.arima.model import ARIMA
+
+    # ARIMA order kept conservative for speed and stability.
+    return ARIMA(series, order=(1, 1, 1)).fit()
+
+
+def _fit_statsmodels_sarimax(series: pd.Series):
+    from statsmodels.tsa.statespace.sarimax import SARIMAX
+
+    # Weekly seasonality in BD trading days ~ 5.
+    return SARIMAX(
+        series,
+        order=(1, 1, 1),
+        seasonal_order=(0, 0, 0, 0),
+        enforce_stationarity=False,
+        enforce_invertibility=False,
+    ).fit(disp=False)
+
+
+def _fit_ses(series: pd.Series):
+    from statsmodels.tsa.holtwinters import SimpleExpSmoothing
+
+    return SimpleExpSmoothing(series, initialization_method="estimated").fit()
+
+
+def _fit_hwes(series: pd.Series):
+    from statsmodels.tsa.holtwinters import ExponentialSmoothing
+
+    seasonal_periods = 5
+    # If too short for seasonality, fall back to trend only.
+    if len(series) < (2 * seasonal_periods + 1):
+        return ExponentialSmoothing(series, trend="add", seasonal=None, initialization_method="estimated").fit()
+    return ExponentialSmoothing(
+        series,
+        trend="add",
+        seasonal="add",
+        seasonal_periods=seasonal_periods,
+        initialization_method="estimated",
+    ).fit()
+
+
+def _series_from_df(df: pd.DataFrame) -> pd.Series:
+    # Treat trading days as equally spaced steps.
+    return pd.Series([float(v) for v in df["y"].tolist()])
+
+
+def _evaluate_algorithms(df: pd.DataFrame, holdout: int) -> tuple[dict[str, Any], str, float | None]:
+    """Evaluate multiple algorithms on last-N holdout; return details + winner."""
+
+    train_df, test_df = _split_holdout(df, holdout)
+    if test_df.empty or len(train_df) < _MIN_TRAIN_ROWS:
+        # Default: Prophet baseline without validation.
+        return (
+            {
+                "holdout": holdout,
+                "selected": "prophet:baseline_additive",
+                "evaluations": [],
+            },
+            "prophet:baseline_additive",
+            None,
+        )
+
+    future_ds = [pd.to_datetime(v) for v in test_df["ds"].tolist()]
+    trues = [float(v) for v in test_df["y"].tolist()]
+
+    evaluations: list[dict[str, Any]] = []
+
+    # --- Prophet strategies ---
+    for strategy in _STRATEGIES:
+        try:
+            preds = _predict_prophet_on_dates(train_df, future_ds, strategy)
+            metrics = _eval_metrics(trues, preds)
+            evaluations.append(
+                {
+                    "model": f"prophet:{strategy.name}",
+                    "metrics": metrics,
+                    "score": round(_rank_score(metrics), 6),
+                }
+            )
+        except Exception as e:
+            evaluations.append(
+                {
+                    "model": f"prophet:{strategy.name}",
+                    "metrics": {"rmse": None, "mape": None, "mae": None, "pfe": None, "residual_std": None},
+                    "score": float("inf"),
+                    "error": str(e),
+                }
+            )
+
+    # --- Classic time series models (close only) ---
+    train_series = _series_from_df(train_df)
+
+    def _eval_stats_model(name: str, fit_fn) -> None:
+        try:
+            fitted = fit_fn(train_series)
+
+            # Prefer forecast with steps.
+            forecast = None
+            if hasattr(fitted, "get_forecast"):
+                forecast = fitted.get_forecast(steps=len(test_df))
+                preds = [float(v) for v in forecast.predicted_mean.tolist()]
+            elif hasattr(fitted, "forecast"):
+                preds = [float(v) for v in fitted.forecast(steps=len(test_df)).tolist()]
+            else:
+                preds = []
+
+            metrics = _eval_metrics(trues, preds)
+            evaluations.append(
+                {
+                    "model": name,
+                    "metrics": metrics,
+                    "score": round(_rank_score(metrics), 6),
+                }
+            )
+        except Exception as e:
+            evaluations.append(
+                {
+                    "model": name,
+                    "metrics": {"rmse": None, "mape": None, "mae": None, "pfe": None, "residual_std": None},
+                    "score": float("inf"),
+                    "error": str(e),
+                }
+            )
+
+    _eval_stats_model("arima(1,1,1)", _fit_statsmodels_arima)
+    _eval_stats_model("sarimax(1,1,1)", _fit_statsmodels_sarimax)
+    _eval_stats_model("ses", _fit_ses)
+    _eval_stats_model("hwes", _fit_hwes)
+
+    ranked = sorted(evaluations, key=lambda item: float(item.get("score", float("inf"))))
+    winner = ranked[0]["model"] if ranked else "prophet:baseline_additive"
+    residual_std = None
+    if ranked and isinstance(ranked[0].get("metrics"), dict):
+        residual_std = ranked[0]["metrics"].get("residual_std")
+
+    return (
+        {
+            "holdout": holdout,
+            "selected": winner,
+            "evaluations": ranked,
+        },
+        winner,
+        (float(residual_std) if residual_std is not None else None),
     )
 
 
@@ -335,6 +596,18 @@ def _save_model(code: str, model: Prophet) -> None:
     model_path.write_text(model_to_json(model), encoding="utf-8")
 
 
+def _save_pickle_model(code: str, model: Any) -> None:
+    path = _pickle_path(code)
+    path.write_bytes(pickle.dumps(model, protocol=pickle.HIGHEST_PROTOCOL))
+
+
+def _load_pickle_model(code: str) -> Any | None:
+    path = _pickle_path(code)
+    if not path.exists():
+        return None
+    return pickle.loads(path.read_bytes())
+
+
 def train_model(code: str) -> None:
     logger.info(f"[TRAIN_START] Training model for code={code}")
     df = _load_series(code)
@@ -344,27 +617,47 @@ def train_model(code: str) -> None:
 
     logger.info(f"[TRAIN_DATA] code={code}, historical_data_points={len(df)}, date_range={df['ds'].min()}_to_{df['ds'].max()}")
 
-    strategy, evaluations = _choose_strategy(df)
-    logger.info(f"[TRAIN_STRATEGY] code={code}, selected={strategy.name}")
+    holdout = _default_holdout(df)
+    validation, selected_model, residual_std = _evaluate_algorithms(df, holdout)
+    logger.info(f"[TRAIN_STRATEGY] code={code}, selected={selected_model}, holdout={holdout}")
 
-    model = _build_prophet(strategy)
-    model.fit(df)
+    # Fit the selected model on full history.
+    if selected_model.startswith("prophet:"):
+        selected_strategy = selected_model.split(":", 1)[1]
+        strategy = next((s for s in _STRATEGIES if s.name == selected_strategy), _STRATEGIES[0])
+        model = _fit_prophet_full(df, strategy)
+        _save_model(code, model)
+    else:
+        series = _series_from_df(df)
+        fitted = None
+        if selected_model.startswith("arima"):
+            fitted = _fit_statsmodels_arima(series)
+        elif selected_model.startswith("sarimax"):
+            fitted = _fit_statsmodels_sarimax(series)
+        elif selected_model == "ses":
+            fitted = _fit_ses(series)
+        elif selected_model == "hwes":
+            fitted = _fit_hwes(series)
+        else:
+            # Fallback to Prophet if something unexpected happens.
+            strategy = _STRATEGIES[0]
+            model = _fit_prophet_full(df, strategy)
+            selected_model = f"prophet:{strategy.name}"
+            _save_model(code, model)
+
+        if fitted is not None:
+            _save_pickle_model(code, fitted)
 
     trained_until = df["ds"].max().date()
-    _save_model(code, model)
     _write_meta(
         ModelMeta(
             code=code,
             trained_until=trained_until,
             trained_at=datetime.utcnow(),
             row_count=len(df),
-            strategy=strategy.name,
-            validation={
-                "selected": strategy.name,
-                "evaluations": evaluations,
-            }
-            if evaluations
-            else None,
+            strategy=selected_model,
+            validation=validation,
+            residual_std=residual_std,
         )
     )
     logger.info(f"[TRAIN_DONE] Model trained for code={code}, trained_until={trained_until}")
@@ -429,8 +722,20 @@ def _next_bd_trading_days(start: date, n: int) -> list[pd.Timestamp]:
 def forecast_next_days(code: str) -> list[dict[str, Any]]:
     logger.info(f"[FORECAST_START] code={code}")
     ensure_trained(code)
-    model = _load_model(code)
-    if model is None:
+    meta = _read_meta(code)
+    selected = meta.strategy if meta else None
+
+    prophet_model = None
+    sm_model = None
+    if selected and selected.startswith("prophet:"):
+        prophet_model = _load_model(code)
+    elif selected:
+        sm_model = _load_pickle_model(code)
+    else:
+        # Backward compatibility: older meta stored just prophet strategy name.
+        prophet_model = _load_model(code)
+
+    if prophet_model is None and sm_model is None:
         logger.error(f"[FORECAST_ERROR] Model missing after training for code={code}")
         raise RuntimeError(f"Model missing after training for code={code}")
 
@@ -441,18 +746,70 @@ def forecast_next_days(code: str) -> list[dict[str, Any]]:
         raise ValueError(f"No historical data found for code={code}")
     
     logger.info(f"[FORECAST_DATA] code={code}, last_observed={last_observed}, forecast_days={settings.forecast_days}")
-    future = pd.DataFrame({"ds": _next_bd_trading_days(last_observed, settings.forecast_days)})
-    forecast = model.predict(future)
+    future_ds = _next_bd_trading_days(last_observed, settings.forecast_days)
+
+    if prophet_model is not None:
+        future = pd.DataFrame({"ds": future_ds})
+        forecast = prophet_model.predict(future)
+        rows_iter = forecast.iterrows()
+        row_to_pred = lambda row: (
+            float(row["yhat"]) if pd.notna(row["yhat"]) else None,
+            float(row["yhat_lower"]) if pd.notna(row["yhat_lower"]) else None,
+            float(row["yhat_upper"]) if pd.notna(row["yhat_upper"]) else None,
+        )
+    else:
+        # statsmodels path
+        steps = len(future_ds)
+        yhat: list[float]
+        lower: list[float] | None = None
+        upper: list[float] | None = None
+
+        if hasattr(sm_model, "get_forecast"):
+            fc = sm_model.get_forecast(steps=steps)
+            yhat = [float(v) for v in fc.predicted_mean.tolist()]
+            try:
+                alpha = 1.0 - float(settings.interval_width)
+                ci = fc.conf_int(alpha=alpha)
+                # columns may be named like "lower y" / "upper y".
+                lower = [float(v) for v in ci.iloc[:, 0].tolist()]
+                upper = [float(v) for v in ci.iloc[:, 1].tolist()]
+            except Exception:
+                lower = None
+                upper = None
+        elif hasattr(sm_model, "forecast"):
+            yhat = [float(v) for v in sm_model.forecast(steps=steps).tolist()]
+        else:
+            yhat = []
+
+        residual_std = float(meta.residual_std) if (meta and meta.residual_std is not None) else 0.0
+        if lower is None or upper is None:
+            lower = [v - (2.0 * residual_std) for v in yhat]
+            upper = [v + (2.0 * residual_std) for v in yhat]
+
+        forecast = pd.DataFrame({
+            "ds": future_ds,
+            "yhat": yhat,
+            "yhat_lower": lower,
+            "yhat_upper": upper,
+        })
+        rows_iter = forecast.iterrows()
+        row_to_pred = lambda row: (
+            float(row["yhat"]) if pd.notna(row["yhat"]) else None,
+            float(row["yhat_lower"]) if pd.notna(row["yhat_lower"]) else None,
+            float(row["yhat_upper"]) if pd.notna(row["yhat_upper"]) else None,
+        )
 
     # Output: list of predictions with code/date/high/low/close
     # Defensive: ensure unique dates (some downstream consumers assume one row per day).
     out: list[dict[str, Any]] = []
     seen_dates: set[str] = set()
-    for _, row in forecast.iterrows():
+    for _, row in rows_iter:
         ds = pd.to_datetime(row["ds"]).date().isoformat()
-        yhat = float(row["yhat"]) if pd.notna(row["yhat"]) else None
-        yhat_lower = float(row["yhat_lower"]) if pd.notna(row["yhat_lower"]) else yhat
-        yhat_upper = float(row["yhat_upper"]) if pd.notna(row["yhat_upper"]) else yhat
+        yhat, yhat_lower, yhat_upper = row_to_pred(row)
+        if yhat_lower is None:
+            yhat_lower = yhat
+        if yhat_upper is None:
+            yhat_upper = yhat
 
         if yhat is None:
             continue
@@ -500,6 +857,7 @@ def get_model_status(code: str) -> dict[str, Any]:
                 "row_count": meta.row_count,
                 "strategy": meta.strategy,
                 "validation": meta.validation,
+                "residual_std": meta.residual_std,
             }
             if meta
             else None
@@ -508,11 +866,7 @@ def get_model_status(code: str) -> dict[str, Any]:
 
 
 def evaluate_code(code: str, points: int = _DEFAULT_BACKTEST_POINTS) -> dict[str, Any]:
-    """Evaluate all supported strategies for a code using rolling validation.
-
-    This endpoint-friendly utility lets you test model quality for a company
-    before running production sync/predict.
-    """
+    """Evaluate all supported algorithms for a code using a last-N holdout split."""
 
     code = (code or "").strip()
     if not code:
@@ -521,19 +875,19 @@ def evaluate_code(code: str, points: int = _DEFAULT_BACKTEST_POINTS) -> dict[str
     df = _load_series(code)
     if df.empty:
         raise ValueError(f"No historical data found for code={code}")
-    if len(df) < (_MIN_TRAIN_ROWS + 3):
+    if len(df) < (_MIN_TRAIN_ROWS + 2):
         raise ValueError(
             f"Not enough data for evaluation for code={code}. "
-            f"Need at least {_MIN_TRAIN_ROWS + 3} rows, got {len(df)}"
+            f"Need at least {_MIN_TRAIN_ROWS + 2} rows, got {len(df)}"
         )
 
-    eval_points = max(1, min(points, len(df) - _MIN_TRAIN_ROWS))
-    evaluations = [_rolling_backtest(df, strategy, eval_points) for strategy in _STRATEGIES]
-    ranked = sorted(evaluations, key=lambda item: float(item["score"]))
+    # Backward compatible query param: `points` now means holdout days.
+    holdout = max(1, min(int(points), len(df) - _MIN_TRAIN_ROWS))
+    validation, selected, _ = _evaluate_algorithms(df, holdout)
     return {
         "code": code,
         "rows": len(df),
-        "points": eval_points,
-        "recommended_strategy": ranked[0]["strategy"] if ranked else None,
-        "evaluations": ranked,
+        "holdout": holdout,
+        "recommended_model": selected,
+        "evaluations": validation.get("evaluations", []),
     }

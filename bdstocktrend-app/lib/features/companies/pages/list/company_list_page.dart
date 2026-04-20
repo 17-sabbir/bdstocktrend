@@ -2,7 +2,6 @@ import 'package:bd_stock_trend/core/core.dart';
 import 'package:bd_stock_trend/features/features.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -53,23 +52,11 @@ class _CompanyListState extends State<CompanyListPage> {
         : Uri.encodeFull(noLogo);
   }
 
-  Widget _fallbackLogo() {
-    return Image.network(
-      noLogo,
-      fit: BoxFit.contain,
-      errorBuilder: (context, error, stackTrace) => Center(
-        child: Icon(
-          Icons.image_not_supported_rounded,
-          color: Palette.subText.withOpacity(0.5),
-        ),
-      ),
-    );
-  }
 
   Widget _buildCompanyLogo(Company company) {
     final url = _resolveLogoUrl(company);
 
-    Widget defaultFallback = Center(
+    final Widget defaultFallback = Center(
       child: Container(
         width: double.infinity,
         height: double.infinity,

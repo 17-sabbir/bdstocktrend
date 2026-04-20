@@ -19,11 +19,11 @@ A drop-in replacement forecasting engine for BDStockTrend that is compatible wit
 
 ## Strategy Selection
 
-This engine now performs per-company strategy selection during training.
+This engine performs **per-company meta-model selection** during training (no DB schema changes).
 
-- It evaluates multiple Prophet configurations using rolling backtests on each company's own history.
-- It picks the best strategy based on a weighted score from MAE, RMSE, and MAPE.
-- Chosen strategy and validation results are stored in each model's `meta.json`.
+- It evaluates multiple forecasting approaches (Prophet strategies + classical time-series models like ARIMA/SARIMAX/SES/HWES) on a **last-N trading-days holdout**.
+- It picks the best model based on holdout error metrics (RMSE/MAPE/PFE).
+- The selected model id and validation results are stored in each model's `meta.json`.
 
 You can test before predicting:
 
