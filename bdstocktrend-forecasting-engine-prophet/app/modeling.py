@@ -354,6 +354,17 @@ def _fit_statsmodels_arima(series: pd.Series):
     return ARIMA(series, order=(1, 1, 1)).fit()
 
 
+def _fit_statsmodels_arima_drift(series: pd.Series):
+    """ARIMA with drift (trend) to avoid overly-flat forecasts when the series trends.
+
+    In statsmodels, for integrated models (d>0), using `trend='t'` acts like a drift term.
+    """
+
+    from statsmodels.tsa.arima.model import ARIMA
+
+    return ARIMA(series, order=(1, 1, 1), trend="t").fit()
+
+
 def _fit_statsmodels_sarimax(series: pd.Series):
     from statsmodels.tsa.statespace.sarimax import SARIMAX
 
@@ -362,6 +373,20 @@ def _fit_statsmodels_sarimax(series: pd.Series):
         series,
         order=(1, 1, 1),
         seasonal_order=(0, 0, 0, 0),
+        enforce_stationarity=False,
+        enforce_invertibility=False,
+    ).fit(disp=False)
+
+
+def _fit_statsmodels_sarimax_weekly(series: pd.Series):
+    """SARIMAX with a simple weekly seasonal component (s=5 trading days)."""
+
+    from statsmodels.tsa.statespace.sarimax import SARIMAX
+
+    return SARIMAX(
+        series,
+        order=(1, 1, 1),
+        seasonal_order=(1, 0, 1, 5),
         enforce_stationarity=False,
         enforce_invertibility=False,
     ).fit(disp=False)
@@ -473,7 +498,9 @@ def _evaluate_algorithms(df: pd.DataFrame, holdout: int) -> tuple[dict[str, Any]
             )
 
     _eval_stats_model("arima(1,1,1)", _fit_statsmodels_arima)
+    _eval_stats_model("arima(1,1,1)+drift", _fit_statsmodels_arima_drift)
     _eval_stats_model("sarimax(1,1,1)", _fit_statsmodels_sarimax)
+    _eval_stats_model("sarimax(1,1,1)x(1,0,1,5)", _fit_statsmodels_sarimax_weekly)
     _eval_stats_model("ses", _fit_ses)
     _eval_stats_model("hwes", _fit_hwes)
 
@@ -631,9 +658,15 @@ def train_model(code: str) -> None:
         series = _series_from_df(df)
         fitted = None
         if selected_model.startswith("arima"):
-            fitted = _fit_statsmodels_arima(series)
+            if "+drift" in selected_model:
+                fitted = _fit_statsmodels_arima_drift(series)
+            else:
+                fitted = _fit_statsmodels_arima(series)
         elif selected_model.startswith("sarimax"):
-            fitted = _fit_statsmodels_sarimax(series)
+            if "x(1,0,1,5)" in selected_model:
+                fitted = _fit_statsmodels_sarimax_weekly(series)
+            else:
+                fitted = _fit_statsmodels_sarimax(series)
         elif selected_model == "ses":
             fitted = _fit_ses(series)
         elif selected_model == "hwes":
