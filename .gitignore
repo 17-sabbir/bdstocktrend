@@ -116,5 +116,15 @@ bdstocktrend-forecasting-engine-prophet/.ruff_cache/
 bdstocktrend-forecasting-engine-prophet/.venv/
 bdstocktrend-forecasting-engine-prophet/venv/
 bdstocktrend-forecasting-engine-prophet/app/__pycache__/
-bdstocktrend/extract_pdf.py
-bdstocktrend/Journal_04\ A\ Predictive\ Meta\ Model\ for\ Forecasting\ Stock\ Price\ using\ Time\ Series\ Data.pdf
+
+# =============================
+# Python (global)
+# =============================
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
