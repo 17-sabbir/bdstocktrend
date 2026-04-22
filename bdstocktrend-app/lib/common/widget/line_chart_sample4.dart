@@ -7,10 +7,14 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 class LineChartSample4 extends StatefulWidget {
-  final List<TimeSeries> data1;
-  final List<TimeSeries> data2;
+  final List<TimeSeries> historicalData;
+  final List<TimeSeries> forecastData;
 
-  const LineChartSample4({super.key, required this.data1, required this.data2});
+  const LineChartSample4({
+    super.key,
+    required this.historicalData,
+    required this.forecastData,
+  });
 
   @override
   State<LineChartSample4> createState() => _LineChartSample4State();
@@ -19,6 +23,7 @@ class LineChartSample4 extends StatefulWidget {
 class _VerticalPointHighlighter2 extends CustomPainter {
   final List<FlSpot> spots1;
   final List<FlSpot> spots2;
+  final FlSpot? transitionSpot;
   final double minX;
   final double maxX;
   final double minY;
@@ -36,6 +41,7 @@ class _VerticalPointHighlighter2 extends CustomPainter {
   _VerticalPointHighlighter2({
     required this.spots1,
     required this.spots2,
+    this.transitionSpot,
     required this.minX,
     required this.maxX,
     required this.minY,
@@ -115,6 +121,32 @@ class _VerticalPointHighlighter2 extends CustomPainter {
       canvas.drawCircle(Offset(px, py), dotRadius, fillPaint);
       canvas.drawCircle(Offset(px, py), dotRadius, strokePaint);
     }
+
+    // Always keep the historical/forecast junction visible, even when it is
+    // not aligned with the 7-day cadence.
+    if (transitionSpot != null) {
+      final s = transitionSpot!;
+      final xNorm = (s.x - minX) / (maxX - minX);
+      final px = leftReserved + (xNorm * plotWidth);
+      final yNorm = (maxY - s.y) / (maxY - minY);
+      final py = (yNorm * plotHeight).clamp(0.0, plotHeight);
+      final endY = (py + dotRadius).clamp(0.0, plotHeight);
+
+      final emphasisLine = Paint()
+        ..color = color.withOpacity(0.98)
+        ..strokeWidth = strokeWidth + 0.4
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.square;
+
+      canvas.drawLine(Offset(px, plotHeight), Offset(px, endY), emphasisLine);
+
+      final transitionStrokePaint = Paint()
+        ..color = dotPrimaryStrokeColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.6;
+      canvas.drawCircle(Offset(px, py), dotRadius, fillPaint);
+      canvas.drawCircle(Offset(px, py), dotRadius, transitionStrokePaint);
+    }
   }
 
   @override
@@ -122,8 +154,12 @@ class _VerticalPointHighlighter2 extends CustomPainter {
 }
 
 class _LineChartSample4State extends State<LineChartSample4> {
-  static const double _pointSpacing = 20;
+  static const double _pointSpacing = 15;
   static const double _dayInMs = 24 * 60 * 60 * 1000;
+  static const int _labelStepDays = 7;
+  static const int _edgePaddingDays = 1;
+  static const double _contentPaddingLeft = 12;
+  static const double _contentPaddingRight = 18;
 
   List<Color> gradientColors1 = [
     Colors.greenAccent,
@@ -141,6 +177,7 @@ class _LineChartSample4State extends State<LineChartSample4> {
   double _minX = 0;
 
   double _maxX = 0;
+  double _focusX = 0;
   double _minY = 0;
   double _maxY = 0;
   double _leftTitlesInterval = 0;
@@ -149,6 +186,7 @@ class _LineChartSample4State extends State<LineChartSample4> {
   late final TransformationController _transformationController;
   late final ScrollController _scrollController;
   bool _initialScrollApplied = false;
+  bool _initialScrollCallbackScheduled = false;
 
   void _applyYAxisBounds({required double dataMinY, required double dataMaxY}) {
     final safeMin = dataMinY.isFinite ? dataMinY : 0;
@@ -162,8 +200,29 @@ class _LineChartSample4State extends State<LineChartSample4> {
     var minY = safeMin - padding;
     var maxY = safeMax + padding;
 
-    // Force Y-axis interval to 0.5 as requested
-    const interval = 0.5;
+    // Compute a "nice" interval dynamically so the Y-axis ticks look clean
+    double interval;
+    if (range <= 0) {
+      interval = base / 10;
+      if (interval <= 0) interval = 1.0;
+    } else {
+      const int targetTicks = 6;
+      final raw = range / targetTicks;
+      final exp = math.pow(10, (math.log(raw) / math.ln10).floor()).toDouble();
+      final frac = raw / exp;
+      double niceFrac;
+      if (frac <= 1) {
+        niceFrac = 1;
+      } else if (frac <= 2) {
+        niceFrac = 2;
+      } else if (frac <= 5) {
+        niceFrac = 5;
+      } else {
+        niceFrac = 10;
+      }
+      interval = niceFrac * exp;
+      if (interval <= 0) interval = 1.0;
+    }
 
     minY = (minY / interval).floorToDouble() * interval;
     maxY = (maxY / interval).ceilToDouble() * interval;
@@ -174,7 +233,7 @@ class _LineChartSample4State extends State<LineChartSample4> {
 
     int decimals = 0;
     var tmp = interval;
-    while (tmp < 1 && decimals < 4) {
+    while (tmp < 1 && decimals < 6) {
       tmp *= 10;
       decimals++;
     }
@@ -197,6 +256,7 @@ class _LineChartSample4State extends State<LineChartSample4> {
 
   @override
   void dispose() {
+    _initialScrollCallbackScheduled = false;
     _scrollController.dispose();
     _transformationController.dispose();
     super.dispose();
@@ -205,63 +265,99 @@ class _LineChartSample4State extends State<LineChartSample4> {
   @override
   void didUpdateWidget(covariant LineChartSample4 oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.data1, widget.data1) ||
-        !identical(oldWidget.data2, widget.data2)) {
+    if (!identical(oldWidget.historicalData, widget.historicalData) ||
+        !identical(oldWidget.forecastData, widget.forecastData)) {
       _prepareStockData();
     }
   }
 
   void _prepareStockData() {
-    if (widget.data1.isEmpty || widget.data2.isEmpty) {
+    if (widget.historicalData.isEmpty && widget.forecastData.isEmpty) {
       _values1 = const [];
       _values2 = const [];
       _minX = 0;
       _maxX = 1;
+      _focusX = 0.5;
       _minY = 0;
       _maxY = 1;
       _leftTitlesInterval = 1;
       _leftTitlesDecimals = 0;
       _initialScrollApplied = false;
-      setState(() {});
+      _initialScrollCallbackScheduled = false;
+      if (mounted) setState(() {});
       return;
     }
-    double minY = double.maxFinite;
-    double maxY = double.minPositive;
 
-    _values1 = widget.data1.map((datum) {
-      if (minY > datum.value) minY = datum.value;
-      if (maxY < datum.value) maxY = datum.value;
-      return FlSpot(
-        datum.time.millisecondsSinceEpoch.toDouble(),
-        datum.value,
-      );
-    }).toList();
+    _values1 = widget.historicalData
+        .map((datum) => FlSpot(
+              datum.time.millisecondsSinceEpoch.toDouble(),
+              datum.value,
+            ))
+        .toList();
 
-    _values2 = widget.data2.map((datum) {
-      if (minY > datum.value) minY = datum.value;
-      if (maxY < datum.value) maxY = datum.value;
-      return FlSpot(
-        datum.time.millisecondsSinceEpoch.toDouble(),
-        datum.value,
-      );
-    }).toList();
+    _values2 = widget.forecastData
+        .map((datum) => FlSpot(
+              datum.time.millisecondsSinceEpoch.toDouble(),
+              datum.value,
+            ))
+        .toList();
 
     // join the series so the forecast connects to history
-    if (_values1.isNotEmpty) {
+    if (_values1.isNotEmpty && _values2.isNotEmpty) {
       _values2.insert(0, _values1.last);
     }
 
-    _minX = min(_values1.first.x, _values2.first.x);
-    _maxX = max(_values1.last.x, _values2.last.x);
+    final allValues = <FlSpot>[..._values1, ..._values2];
+    final minY = allValues.map((s) => s.y).reduce(math.min);
+    final maxY = allValues.map((s) => s.y).reduce(math.max);
+
+    final dataMinX = allValues.map((s) => s.x).reduce(math.min);
+    final dataMaxX = allValues.map((s) => s.x).reduce(math.max);
+
+    _focusX = _values1.isNotEmpty ? _values1.last.x : (dataMinX + dataMaxX) / 2;
+
+    final leftSpan = (_focusX - dataMinX).abs();
+    final rightSpan = (dataMaxX - _focusX).abs();
+    final balancedHalfSpan = math.max(leftSpan, rightSpan);
+    final safeHalfSpan = balancedHalfSpan <= 0 ? _dayInMs : balancedHalfSpan;
+    final edgePadding = _edgePaddingDays * _dayInMs;
+
+    _minX = _focusX - safeHalfSpan - edgePadding;
+    _maxX = _focusX + safeHalfSpan + edgePadding;
+
     _applyYAxisBounds(dataMinY: minY, dataMaxY: maxY);
     _initialScrollApplied = false;
+    _initialScrollCallbackScheduled = false;
 
-    setState(() {});
+    if (mounted) setState(() {});
+  }
+
+  void _scheduleInitialScroll({
+    required double desiredWidth,
+    required double viewportWidth,
+    required double chartWidth,
+  }) {
+    if (!mounted || _initialScrollApplied || _initialScrollCallbackScheduled) {
+      return;
+    }
+
+    _initialScrollCallbackScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initialScrollCallbackScheduled = false;
+      if (!mounted) return;
+
+      _applyInitialScroll(
+        desiredWidth: desiredWidth,
+        viewportWidth: viewportWidth,
+        chartWidth: chartWidth,
+      );
+    });
   }
 
   void _applyInitialScroll({
     required double desiredWidth,
     required double viewportWidth,
+    required double chartWidth,
   }) {
     if (_initialScrollApplied || !_scrollController.hasClients) return;
 
@@ -278,9 +374,8 @@ class _LineChartSample4State extends State<LineChartSample4> {
       return;
     }
 
-    final focusX = _values1.isNotEmpty ? _values1.last.x : _minX;
-    final ratio = ((focusX - _minX) / span).clamp(0.0, 1.0);
-    final focusPixels = ratio * desiredWidth;
+    final ratio = ((_focusX - _minX) / span).clamp(0.0, 1.0);
+    final focusPixels = _contentPaddingLeft + (ratio * chartWidth);
     final target = (focusPixels - viewportWidth / 2).clamp(0.0, maxScroll);
 
     _scrollController.jumpTo(target);
@@ -295,19 +390,20 @@ class _LineChartSample4State extends State<LineChartSample4> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final pointsCount = max(_values1.length, _values2.length);
+        final spanDays = (_maxX - _minX) / _dayInMs;
         final desiredWidth = math.max(
           constraints.maxWidth,
-          pointsCount * _pointSpacing,
+          spanDays * _pointSpacing,
         );
+        final chartWidth =
+            (desiredWidth - _contentPaddingLeft - _contentPaddingRight)
+                .clamp(0.0, double.infinity);
 
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          _applyInitialScroll(
-            desiredWidth: desiredWidth,
-            viewportWidth: constraints.maxWidth,
-          );
-        });
+        _scheduleInitialScroll(
+          desiredWidth: desiredWidth,
+          viewportWidth: constraints.maxWidth,
+          chartWidth: chartWidth,
+        );
 
         return SingleChildScrollView(
           controller: _scrollController,
@@ -319,8 +415,8 @@ class _LineChartSample4State extends State<LineChartSample4> {
             height: constraints.maxHeight,
             child: Padding(
               padding: const EdgeInsets.only(
-                right: 18,
-                left: 12,
+                right: _contentPaddingRight,
+                left: _contentPaddingLeft,
                 top: 24,
                 bottom: 12,
               ),
@@ -343,11 +439,13 @@ class _LineChartSample4State extends State<LineChartSample4> {
                           painter: _VerticalPointHighlighter2(
                             spots1: _values1,
                             spots2: _values2,
+                            transitionSpot:
+                                _values1.isNotEmpty ? _values1.last : null,
                             minX: _minX,
                             maxX: _maxX,
                             minY: _minY,
                             maxY: _maxY,
-                            step: 7,
+                            step: _labelStepDays,
                             leftReserved: 44,
                             bottomReserved: 48,
                             color: gridColor.withOpacity(0.95),
@@ -382,7 +480,7 @@ class _LineChartSample4State extends State<LineChartSample4> {
         }
         final tick = ((value - _minX) / _dayInMs).round().abs();
         // Show label only for every 7th day; hide intermediate day labels
-        if (tick % 7 != 0) return Container();
+        if (tick % _labelStepDays != 0) return Container();
 
         final time = DateFormat('dd/MM/yyyy').format(date);
 

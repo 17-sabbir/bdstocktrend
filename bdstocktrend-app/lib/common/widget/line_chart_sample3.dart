@@ -15,8 +15,29 @@ class LineChartSample3 extends StatefulWidget {
 }
 
 class _LineChartSample3State extends State<LineChartSample3> {
-  static const double _pointSpacing = 20;
+  static const double _pointSpacing = 15;
   static const double _dayInMs = 24 * 60 * 60 * 1000;
+  static const int _rightPaddingDays = 1;
+  static const double _initialRightGapPx = 20;
+
+  // ── Fixed 6-month window ─────────────────────────────────────────────────
+  // X-axis always spans [now - 6 months … now], regardless of how much data
+  // is actually present. The window is computed once per build so that the
+  // axis does not drift while the widget is on screen.
+  static double _windowMinX() {
+    final now = DateTime.now();
+    final sixMonthsAgo = DateTime(now.year, now.month - 6, now.day);
+    return sixMonthsAgo.millisecondsSinceEpoch.toDouble();
+  }
+
+  static double _windowMaxX() {
+    // Use end-of-today plus a small padding so the chart initially shows
+    // a bit of empty space to the right of the latest point.
+    final now = DateTime.now();
+    final endOfToday = DateTime(now.year, now.month, now.day, 23, 59, 59);
+    final padded = endOfToday.add(const Duration(days: _rightPaddingDays));
+    return padded.millisecondsSinceEpoch.toDouble();
+  }
 
   List<Color> gradientColors = [
     Colors.greenAccent,
@@ -35,6 +56,7 @@ class _LineChartSample3State extends State<LineChartSample3> {
   late final TransformationController _transformationController;
   late final ScrollController _scrollController;
   bool _initialScrollApplied = false;
+  bool _initialScrollCallbackScheduled = false;
 
   void _applyYAxisBounds({required double dataMinY, required double dataMaxY}) {
     final safeMin = dataMinY.isFinite ? dataMinY : 0;
@@ -49,8 +71,29 @@ class _LineChartSample3State extends State<LineChartSample3> {
     var minY = safeMin - padding;
     var maxY = safeMax + padding;
 
-    // Force Y-axis interval to 0.5 as requested
-    const interval = 0.5;
+    // Compute a "nice" interval dynamically so the Y-axis ticks look clean
+    double interval;
+    if (range <= 0) {
+      interval = base / 10;
+      if (interval <= 0) interval = 1.0;
+    } else {
+      const int targetTicks = 6;
+      final raw = range / targetTicks;
+      final exp = math.pow(10, (math.log(raw) / math.ln10).floor()).toDouble();
+      final frac = raw / exp;
+      double niceFrac;
+      if (frac <= 1) {
+        niceFrac = 1;
+      } else if (frac <= 2) {
+        niceFrac = 2;
+      } else if (frac <= 5) {
+        niceFrac = 5;
+      } else {
+        niceFrac = 10;
+      }
+      interval = niceFrac * exp;
+      if (interval <= 0) interval = 1.0;
+    }
 
     minY = (minY / interval).floorToDouble() * interval;
     maxY = (maxY / interval).ceilToDouble() * interval;
@@ -61,7 +104,7 @@ class _LineChartSample3State extends State<LineChartSample3> {
 
     int decimals = 0;
     var tmp = interval;
-    while (tmp < 1 && decimals < 4) {
+    while (tmp < 1 && decimals < 6) {
       tmp *= 10;
       decimals++;
     }
@@ -76,14 +119,13 @@ class _LineChartSample3State extends State<LineChartSample3> {
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-    _transformationController = TransformationController(
-      Matrix4.identity()..scale(0.9),
-    );
+    _transformationController = TransformationController(Matrix4.identity());
     _prepareStockData();
   }
 
   @override
   void dispose() {
+    _initialScrollCallbackScheduled = false;
     _scrollController.dispose();
     _transformationController.dispose();
     super.dispose();
@@ -100,21 +142,29 @@ class _LineChartSample3State extends State<LineChartSample3> {
   void _prepareStockData() {
     if (widget.data.isEmpty) {
       _values = const [];
-      _minX = 0;
-      _maxX = 1;
+      // Default Y range when no data is available.
       _minY = 0;
       _maxY = 1;
       _leftTitlesInterval = 1;
       _leftTitlesDecimals = 0;
       _initialScrollApplied = false;
-      setState(() {});
+      _initialScrollCallbackScheduled = false;
+      if (mounted) setState(() {});
       return;
     }
 
     double minY = double.maxFinite;
     double maxY = double.minPositive;
 
-    _values = widget.data.map((datum) {
+    // ── Filter to the 6-month window ─────────────────────────────────────
+    // Only include data points that fall within [_minX … _maxX].
+    // This is a client-side safeguard even if the API already filters.
+    _minX = _windowMinX();
+    _maxX = _windowMaxX();
+    _values = widget.data.where((datum) {
+      final ms = datum.time.millisecondsSinceEpoch.toDouble();
+      return ms >= _minX && ms <= _maxX;
+    }).map((datum) {
       if (minY > datum.value) minY = datum.value;
       if (maxY < datum.value) maxY = datum.value;
       return FlSpot(
@@ -123,17 +173,50 @@ class _LineChartSample3State extends State<LineChartSample3> {
       );
     }).toList();
 
-    _minX = _values.first.x;
-    _maxX = _values.last.x;
-    _applyYAxisBounds(dataMinY: minY, dataMaxY: maxY);
-    _initialScrollApplied = false;
+    // If filtering removed everything, still keep the window but reset Y.
+    if (_values.isEmpty) {
+      _minY = 0;
+      _maxY = 1;
+      _leftTitlesInterval = 1;
+      _leftTitlesDecimals = 0;
+    } else {
+      _applyYAxisBounds(dataMinY: minY, dataMaxY: maxY);
+    }
 
-    setState(() {});
+    _initialScrollApplied = false;
+    _initialScrollCallbackScheduled = false;
+    if (mounted) setState(() {});
+  }
+
+  void _scheduleInitialScroll({
+    required double desiredWidth,
+    required double viewportWidth,
+  }) {
+    if (!mounted || _initialScrollApplied || _initialScrollCallbackScheduled) {
+      return;
+    }
+
+    _initialScrollCallbackScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initialScrollCallbackScheduled = false;
+      if (!mounted) return;
+
+      final latestX = _values.isEmpty
+          ? _maxX
+          : _values.map((e) => e.x).reduce((a, b) => a > b ? a : b);
+
+      _applyInitialScroll(
+        desiredWidth: desiredWidth,
+        viewportWidth: viewportWidth,
+        latestX: latestX,
+      );
+    });
   }
 
   void _applyInitialScroll({
     required double desiredWidth,
     required double viewportWidth,
+    required double latestX,
   }) {
     if (_initialScrollApplied || !_scrollController.hasClients) return;
 
@@ -144,8 +227,14 @@ class _LineChartSample3State extends State<LineChartSample3> {
       return;
     }
 
-    final focusOffset = maxScroll / 2;
-    _scrollController.jumpTo(focusOffset);
+    // Start focused on the latest known point with a small right-side gap.
+    // This avoids landing fully inside the padded future area.
+    final rangeX = (_maxX - _minX).abs();
+    final latestRatio = rangeX == 0 ? 1.0 : ((latestX - _minX) / rangeX);
+    final latestPx = (latestRatio.clamp(0.0, 1.0)) * desiredWidth;
+    final target = (latestPx - viewportWidth + _initialRightGapPx)
+        .clamp(0.0, maxScroll);
+    _scrollController.jumpTo(target);
     _initialScrollApplied = true;
   }
 
@@ -157,19 +246,19 @@ class _LineChartSample3State extends State<LineChartSample3> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final pointsCount = _values.length;
+        // Desired width covers at least the full 6-month span at _pointSpacing
+        // per day, or the viewport, whichever is larger. This means the axis
+        // shows the full six-month window even if there are few data points.
+        final spanDays = (_maxX - _minX) / _dayInMs;
         final desiredWidth = math.max(
           constraints.maxWidth,
-          pointsCount * _pointSpacing,
+          spanDays * _pointSpacing,
         );
 
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          _applyInitialScroll(
-            desiredWidth: desiredWidth,
-            viewportWidth: constraints.maxWidth,
-          );
-        });
+        _scheduleInitialScroll(
+          desiredWidth: desiredWidth,
+          viewportWidth: constraints.maxWidth,
+        );
 
         return SingleChildScrollView(
           controller: _scrollController,
@@ -237,6 +326,13 @@ class _LineChartSample3State extends State<LineChartSample3> {
       getTitlesWidget: (value, meta) {
         final DateTime date =
             DateTime.fromMillisecondsSinceEpoch(value.toInt());
+
+        // Hide labels in the padded "future" area; keep labels only up to today.
+        final now = DateTime.now();
+        final endOfTodayMs = DateTime(now.year, now.month, now.day, 23, 59, 59)
+            .millisecondsSinceEpoch
+            .toDouble();
+        if (value > endOfTodayMs) return Container();
 
         if (value == meta.max || value == meta.min) {
           return Container();

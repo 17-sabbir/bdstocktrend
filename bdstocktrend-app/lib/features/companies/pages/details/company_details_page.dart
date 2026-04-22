@@ -51,6 +51,8 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage>
 
   Widget _success(CompanyDetails data) {
     final screenWidth = MediaQuery.sizeOf(context).width;
+    final historicalSeries = data.last30Days;
+    final forecastSeries = data.next30Days;
     // Keep charts a bit more compact; users can pinch-zoom inside the chart.
     final chartHeight = (screenWidth * 0.72).clamp(280.0, 420.0);
 
@@ -76,22 +78,20 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage>
                 physics: const NeverScrollableScrollPhysics(),
                 controller: _tabController,
                 children: [
-                  if (data.last30Days.isNotEmpty)
-                    LineChartSample3(data: data.last30Days)
+                  if (historicalSeries.isNotEmpty)
+                    LineChartSample3(data: historicalSeries)
                   else
-                    const Align(
-                      alignment: Alignment.center,
-                      child: Text('No data available'),
+                    const _ChartEmptyState(
+                      message: 'No historical data available',
                     ),
-                  if (data.next30Days.isNotEmpty)
+                  if (forecastSeries.isNotEmpty)
                     LineChartSample4(
-                      data1: data.last30Days,
-                      data2: data.next30Days,
+                      historicalData: historicalSeries,
+                      forecastData: forecastSeries,
                     )
                   else
-                    const Align(
-                      alignment: Alignment.center,
-                      child: Text('Forecast not available'),
+                    const _ChartEmptyState(
+                      message: 'Forecast data not available',
                     ),
                 ],
               ),
@@ -101,6 +101,34 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage>
             const SpacerV(value: 12),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ChartEmptyState extends StatelessWidget {
+  final String message;
+
+  const _ChartEmptyState({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final mutedColor =
+        Theme.of(context).colorScheme.onSurface.withOpacity(0.62);
+
+    return Align(
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.show_chart_rounded, size: 22, color: mutedColor),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: mutedColor),
+          ),
+        ],
       ),
     );
   }
