@@ -26,8 +26,7 @@ class DioClient with MainBoxMixin {
       baseUrl = "http://stockai.uerd.org";
     }
 
-    try {
-    } catch (_) {}
+    try {} catch (_) {}
 
     _dio = _createDio();
 
@@ -40,8 +39,7 @@ class DioClient with MainBoxMixin {
       return _dio;
     } else {
       /// We need to recreate dio to avoid token issue after login
-      try {
-      } catch (_) {}
+      try {} catch (_) {}
 
       final dio = _createDio();
 
@@ -117,6 +115,11 @@ class DioClient with MainBoxMixin {
           e.response?.data['message'] as String? ?? e.message,
         ),
       );
+    } catch (e, stackTrace) {
+      if (!_isUnitTest) {
+        //nonFatalError(error: e, stackTrace: stackTrace);
+      }
+      return Left(ServerFailure(e.toString()));
     }
   }
 
@@ -154,6 +157,11 @@ class DioClient with MainBoxMixin {
           e.response?.data['message'] as String? ?? e.message,
         ),
       );
+    } catch (e, stackTrace) {
+      if (!_isUnitTest) {
+        //nonFatalError(error: e, stackTrace: stackTrace);
+      }
+      return Left(ServerFailure(e.toString()));
     }
   }
 
@@ -191,6 +199,11 @@ class DioClient with MainBoxMixin {
           e.response?.data['message'] as String? ?? e.message,
         ),
       );
+    } catch (e, stackTrace) {
+      if (!_isUnitTest) {
+        //nonFatalError(error: e, stackTrace: stackTrace);
+      }
+      return Left(ServerFailure(e.toString()));
     }
   }
 }

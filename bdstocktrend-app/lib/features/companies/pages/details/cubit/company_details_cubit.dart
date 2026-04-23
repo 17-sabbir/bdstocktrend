@@ -18,12 +18,16 @@ class CompanyDetailsCubit extends Cubit<CompanyDetailsState> {
 
   Future<void> fetchCompanyDetails(String code) async {
     emit(const _Loading());
-    final data = await _getCompanyDetails.call(CompanyParams(code: code));
+    try {
+      final data = await _getCompanyDetails.call(CompanyParams(code: code));
 
-    data.fold(
-      (failure) => emit(_Failure(_failureMessage(failure))),
-      (result) => emit(_Success(result)),
-    );
+      data.fold(
+        (failure) => emit(_Failure(_failureMessage(failure))),
+        (result) => emit(_Success(result)),
+      );
+    } catch (e) {
+      emit(_Failure(e.toString()));
+    }
   }
 
   String _failureMessage(Failure failure) {
