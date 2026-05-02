@@ -175,6 +175,26 @@ def meta(code: str) -> dict:
     }
 
 
+@app.get("/train/{code}")
+def train(code: str, background_tasks: BackgroundTasks) -> dict:
+    """Immediately retrain model for a specific code.
+
+    Useful after fixing data issues or when parameters change.
+    Returns immediately; training runs in background.
+    """
+
+    try:
+        from app.modeling import train_model
+        background_tasks.add_task(train_model, code)
+        return {
+            "status": "training_scheduled",
+            "code": code,
+            "message": "Model retraining has been scheduled in background"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/evaluate/{code}")
 def evaluate(code: str, points: int = 12) -> dict:
     """Run rolling backtest for supported strategies and recommend one.

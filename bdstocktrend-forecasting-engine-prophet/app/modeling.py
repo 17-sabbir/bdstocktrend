@@ -38,6 +38,7 @@ class StrategyConfig:
     weekly_seasonality: bool
     seasonality_mode: str
     changepoint_prior_scale: float
+    seasonality_prior_scale: float = 10.0  # Controls seasonality strength (lower = weaker seasonality)
 
 
 _STRATEGIES: tuple[StrategyConfig, ...] = (
@@ -46,28 +47,32 @@ _STRATEGIES: tuple[StrategyConfig, ...] = (
         yearly_seasonality=True,
         weekly_seasonality=True,
         seasonality_mode="additive",
-        changepoint_prior_scale=0.05,
+        changepoint_prior_scale=0.10,  # Increased from 0.05 to capture more trend changes
+        seasonality_prior_scale=5.0,  # Lower seasonality strength to let trend show through
     ),
     StrategyConfig(
         name="conservative_additive",
         yearly_seasonality=True,
         weekly_seasonality=True,
         seasonality_mode="additive",
-        changepoint_prior_scale=0.01,
+        changepoint_prior_scale=0.05,  # Keep conservative option
+        seasonality_prior_scale=8.0,
     ),
     StrategyConfig(
         name="flexible_additive",
         yearly_seasonality=True,
         weekly_seasonality=True,
         seasonality_mode="additive",
-        changepoint_prior_scale=0.20,
+        changepoint_prior_scale=0.25,  # Increased from 0.20 for more flexibility
+        seasonality_prior_scale=3.0,  # Very flexible with seasonality
     ),
     StrategyConfig(
         name="multiplicative",
         yearly_seasonality=True,
         weekly_seasonality=True,
         seasonality_mode="multiplicative",
-        changepoint_prior_scale=0.10,
+        changepoint_prior_scale=0.15,  # Increased from 0.10
+        seasonality_prior_scale=6.0,
     ),
 )
 
@@ -244,6 +249,7 @@ def _build_prophet(strategy: StrategyConfig):
         daily_seasonality=False,
         seasonality_mode=strategy.seasonality_mode,
         changepoint_prior_scale=strategy.changepoint_prior_scale,
+        seasonality_prior_scale=strategy.seasonality_prior_scale,
     )
 
 
@@ -350,29 +356,31 @@ def _fit_statsmodels_arima(series: pd.Series):
     # Lazy import to keep engine lightweight when users only want Prophet.
     from statsmodels.tsa.arima.model import ARIMA
 
-    # ARIMA order kept conservative for speed and stability.
-    return ARIMA(series, order=(1, 1, 1)).fit()
+    # Standard ARIMA: d=1 (first differencing) + drift for trend preservation.
+    # Keeps accuracy while avoiding flat forecasts.
+    return ARIMA(series, order=(1, 1, 1), trend='t').fit()
 
 
 def _fit_statsmodels_arima_drift(series: pd.Series):
-    """ARIMA with drift (trend) to avoid overly-flat forecasts when the series trends.
+    """ARIMA with higher differencing for strong trending series.
 
-    In statsmodels, for integrated models (d>0), using `trend='t'` acts like a drift term.
+    Uses d=2 to capture acceleration/deceleration in trend.
+    More aggressive than standard ARIMA but better for highly trending data.
     """
 
     from statsmodels.tsa.arima.model import ARIMA
 
-    return ARIMA(series, order=(1, 1, 1), trend="t").fit()
+    return ARIMA(series, order=(1, 2, 1), trend="t").fit()
 
 
 def _fit_statsmodels_sarimax(series: pd.Series):
     from statsmodels.tsa.statespace.sarimax import SARIMAX
 
-    # Weekly seasonality in BD trading days ~ 5.
+    # Keep d=1 for stability, but add seasonal differencing (D=1) for trend capture.
     return SARIMAX(
         series,
         order=(1, 1, 1),
-        seasonal_order=(0, 0, 0, 0),
+        seasonal_order=(0, 1, 0, 5),
         enforce_stationarity=False,
         enforce_invertibility=False,
     ).fit(disp=False)
@@ -386,7 +394,7 @@ def _fit_statsmodels_sarimax_weekly(series: pd.Series):
     return SARIMAX(
         series,
         order=(1, 1, 1),
-        seasonal_order=(1, 0, 1, 5),
+        seasonal_order=(1, 1, 1, 5),
         enforce_stationarity=False,
         enforce_invertibility=False,
     ).fit(disp=False)
@@ -501,8 +509,9 @@ def _evaluate_algorithms(df: pd.DataFrame, holdout: int) -> tuple[dict[str, Any]
     _eval_stats_model("arima(1,1,1)+drift", _fit_statsmodels_arima_drift)
     _eval_stats_model("sarimax(1,1,1)", _fit_statsmodels_sarimax)
     _eval_stats_model("sarimax(1,1,1)x(1,0,1,5)", _fit_statsmodels_sarimax_weekly)
-    _eval_stats_model("ses", _fit_ses)
-    _eval_stats_model("hwes", _fit_hwes)
+    # Removed SES and HWES because they use exponential smoothing which
+    # always produces flat forecasts (repeats the last value).
+    # They fail to capture trend changes. ARIMA/SARIMAX with differencing work much better.
 
     ranked = sorted(evaluations, key=lambda item: float(item.get("score", float("inf"))))
     winner = ranked[0]["model"] if ranked else "prophet:baseline_additive"
@@ -667,12 +676,8 @@ def train_model(code: str) -> None:
                 fitted = _fit_statsmodels_sarimax_weekly(series)
             else:
                 fitted = _fit_statsmodels_sarimax(series)
-        elif selected_model == "ses":
-            fitted = _fit_ses(series)
-        elif selected_model == "hwes":
-            fitted = _fit_hwes(series)
         else:
-            # Fallback to Prophet if something unexpected happens.
+            # Fallback to Prophet if something unexpected happens (e.g., old model type).
             strategy = _STRATEGIES[0]
             model = _fit_prophet_full(df, strategy)
             selected_model = f"prophet:{strategy.name}"
@@ -772,6 +777,9 @@ def forecast_next_days(code: str) -> list[dict[str, Any]]:
         logger.error(f"[FORECAST_ERROR] Model missing after training for code={code}")
         raise RuntimeError(f"Model missing after training for code={code}")
 
+    # Load historical data for trend estimation (used in flat forecast workaround)
+    df = _load_series(code)
+    
     # Forecast next N Bangladesh trading days (Sun-Thu), skipping Fri/Sat.
     last_observed = _db_max_date(code)
     if last_observed is None:
@@ -815,6 +823,24 @@ def forecast_next_days(code: str) -> list[dict[str, Any]]:
             yhat = []
 
         residual_std = float(meta.residual_std) if (meta and meta.residual_std is not None) else 0.0
+        
+        # Workaround: if forecast is suspiciously flat (no variation), add historical trend
+        # Only apply if: (1) variance is near-zero, (2) historical data shows clear trend
+        if yhat and len(yhat) > 5:
+            yhat_std = float(_std(yhat)) if len(yhat) > 1 else 0.0
+            # Threshold: if forecast std is <5% of residual std, it's likely flat
+            if residual_std > 0 and yhat_std < (residual_std * 0.05):
+                # Estimate trend from last 10 historical values
+                last_10 = [float(v) for v in df.iloc[-10:]["y"].tolist()]
+                if len(last_10) >= 5:
+                    hist_std = float(_std(last_10))
+                    # Only add trend if historical data is NOT flat
+                    if hist_std > (residual_std * 0.1):
+                        recent_trend = (last_10[-1] - last_10[0]) / len(last_10)
+                        trend_factor = recent_trend * 0.5  # Damped: only 50% of historical trend
+                        yhat = [v + (trend_factor * (i + 1)) for i, v in enumerate(yhat)]
+                        logger.info(f"[TREND_BOOST] Applied trend boost to flat forecast, trend={trend_factor:.6f}")
+        
         if lower is None or upper is None:
             lower = [v - (2.0 * residual_std) for v in yhat]
             upper = [v + (2.0 * residual_std) for v in yhat]
