@@ -12,6 +12,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from app.config import settings
@@ -79,6 +80,8 @@ _STRATEGIES: tuple[StrategyConfig, ...] = (
 _MIN_TRAIN_ROWS = 45
 _DEFAULT_BACKTEST_POINTS = 12
 _DEFAULT_HOLDOUT_DAYS = 30
+_EXOG_COLS = ("open", "high", "low", "volume")
+_BD_TRADING_DOWS = (6, 0, 1, 2, 3)
 
 
 _executor = ThreadPoolExecutor(max_workers=settings.sync_max_workers)
@@ -182,25 +185,85 @@ def _db_max_date(code: str) -> date | None:
             return row[0]
 
 
-def _load_series(code: str) -> pd.DataFrame:
+def _load_series(code: str, include_exog: bool = False) -> pd.DataFrame:
     db = get_db()
     with db.pool.connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                "SELECT date, close FROM historical_stocks_data WHERE code = %s AND close IS NOT NULL ORDER BY date ASC",
-                (code,),
-            )
-            rows = cur.fetchall()
+            if include_exog:
+                try:
+                    cur.execute(
+                        "SELECT date, close, open, high, low, volume "
+                        "FROM historical_stocks_data "
+                        "WHERE code = %s AND close IS NOT NULL ORDER BY date ASC",
+                        (code,),
+                    )
+                    rows = cur.fetchall()
+                except Exception:
+                    # Fallback to close-only if exogenous columns are unavailable.
+                    cur.execute(
+                        "SELECT date, close FROM historical_stocks_data "
+                        "WHERE code = %s AND close IS NOT NULL ORDER BY date ASC",
+                        (code,),
+                    )
+                    rows = cur.fetchall()
+            else:
+                cur.execute(
+                    "SELECT date, close FROM historical_stocks_data "
+                    "WHERE code = %s AND close IS NOT NULL ORDER BY date ASC",
+                    (code,),
+                )
+                rows = cur.fetchall()
 
     if not rows:
         return pd.DataFrame(columns=["ds", "y"])
 
-    df = pd.DataFrame(rows, columns=["ds", "y"])
+    if include_exog and len(rows[0]) >= 6:
+        df = pd.DataFrame(rows, columns=["ds", "y", "open", "high", "low", "volume"])
+    else:
+        df = pd.DataFrame(rows, columns=["ds", "y"])
     df["ds"] = pd.to_datetime(df["ds"])
     df["y"] = pd.to_numeric(df["y"], errors="coerce")
-    df = df.dropna(subset=["ds", "y"]).sort_values("ds")
+    if include_exog and all(col in df.columns for col in _EXOG_COLS):
+        for col in _EXOG_COLS:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+        df[_EXOG_COLS] = df[_EXOG_COLS].ffill().bfill()
+        df = df.dropna(subset=["ds", "y", *_EXOG_COLS]).sort_values("ds")
+    else:
+        df = df.dropna(subset=["ds", "y"]).sort_values("ds")
     df = df.drop_duplicates(subset=["ds"], keep="last")
     return df
+
+
+def _price_bucket(last_close: float | None) -> str | None:
+    if last_close is None or math.isnan(last_close):
+        return None
+    if last_close < 50:
+        return "0-50"
+    if last_close < 100:
+        return "50-100"
+    if last_close < 200:
+        return "100-200"
+    if last_close < 300:
+        return "200-300"
+    if last_close < 400:
+        return "300-400"
+    return "400+"
+
+
+def _preferred_models_for_bucket(bucket: str | None) -> list[str]:
+    if bucket == "0-50":
+        return ["telr", "arima(1,1,1)"]
+    if bucket == "50-100":
+        return ["telr", "prophet:baseline_additive"]
+    if bucket == "100-200":
+        return ["telr", "prophet:baseline_additive"]
+    if bucket == "200-300":
+        return ["prophet:baseline_additive", "sarimax(1,1,1)"]
+    if bucket == "300-400":
+        return ["prophet:baseline_additive", "telr"]
+    if bucket == "400+":
+        return ["prophet:baseline_additive", "telr"]
+    return []
 
 
 def _read_meta(code: str) -> ModelMeta | None:
@@ -327,16 +390,53 @@ def _eval_metrics(trues: list[float], preds: list[float]) -> dict[str, Any]:
     }
 
 
-def _rank_score(metrics: dict[str, Any]) -> float:
-    """Smaller is better. Prioritize RMSE, then MAPE, then PFE."""
+def _rank_key(metrics: dict[str, Any], flat_penalty: float) -> tuple[float, float, float, float]:
+    """Rank key: flat penalty first, then PFE, MAPE, RMSE (paper-aligned)."""
+
+    if not metrics or metrics.get("rmse") is None:
+        return (float("inf"), float("inf"), float("inf"), float("inf"))
+    rmse = float(metrics.get("rmse") or 0.0)
+    mape = float(metrics.get("mape") or 0.0)
+    pfe = float(metrics.get("pfe") or 0.0)
+    return (float(flat_penalty), pfe, mape, rmse)
+
+
+def _weighted_score(metrics: dict[str, Any]) -> float:
+    """Compatibility score for logs/clients; smaller is better."""
 
     if not metrics or metrics.get("rmse") is None:
         return float("inf")
     rmse = float(metrics.get("rmse") or 0.0)
     mape = float(metrics.get("mape") or 0.0)
     pfe = float(metrics.get("pfe") or 0.0)
-    # Weighted score (kept simple and stable across companies)
     return (0.6 * rmse) + (0.3 * mape) + (0.1 * pfe)
+
+
+def _flat_penalty(trues: list[float], preds: list[float]) -> float:
+    """Return a large penalty when forecasts are flat but actuals are not."""
+
+    if not preds:
+        return float("inf")
+    true_std = _std(trues)
+    pred_std = _std(preds)
+    if true_std <= 0:
+        return 0.0
+    if pred_std < max(1e-6, true_std * 0.05):
+        return 1e6
+    return 0.0
+
+
+def _metrics_close(candidate: dict[str, Any], best: dict[str, Any], rel_tol: float = 0.05) -> bool:
+    if not candidate or not best:
+        return False
+    for key in ("pfe", "mape", "rmse"):
+        cand = candidate.get(key)
+        base = best.get(key)
+        if cand is None or base is None:
+            return False
+        if abs(float(cand) - float(base)) > max(1e-6, float(base) * rel_tol):
+            return False
+    return True
 
 
 def _predict_prophet_on_dates(train_df: pd.DataFrame, future_ds: list[pd.Timestamp], strategy: StrategyConfig) -> list[float]:
@@ -352,16 +452,16 @@ def _fit_prophet_full(df: pd.DataFrame, strategy: StrategyConfig):
     return model
 
 
-def _fit_statsmodels_arima(series: pd.Series):
+def _fit_statsmodels_arima(series: pd.Series, exog: pd.DataFrame | None = None):
     # Lazy import to keep engine lightweight when users only want Prophet.
     from statsmodels.tsa.arima.model import ARIMA
 
     # Standard ARIMA: d=1 (first differencing) + drift for trend preservation.
     # Keeps accuracy while avoiding flat forecasts.
-    return ARIMA(series, order=(1, 1, 1), trend='t').fit()
+    return ARIMA(series, order=(1, 1, 1), trend="t").fit()
 
 
-def _fit_statsmodels_arima_drift(series: pd.Series):
+def _fit_statsmodels_arima_drift(series: pd.Series, exog: pd.DataFrame | None = None):
     """ARIMA with higher differencing for strong trending series.
 
     Uses d=2 to capture acceleration/deceleration in trend.
@@ -373,12 +473,13 @@ def _fit_statsmodels_arima_drift(series: pd.Series):
     return ARIMA(series, order=(1, 2, 1), trend="t").fit()
 
 
-def _fit_statsmodels_sarimax(series: pd.Series):
+def _fit_statsmodels_sarimax(series: pd.Series, exog: pd.DataFrame | None = None):
     from statsmodels.tsa.statespace.sarimax import SARIMAX
 
     # Keep d=1 for stability, but add seasonal differencing (D=1) for trend capture.
     return SARIMAX(
         series,
+        exog=exog,
         order=(1, 1, 1),
         seasonal_order=(0, 1, 0, 5),
         enforce_stationarity=False,
@@ -386,13 +487,14 @@ def _fit_statsmodels_sarimax(series: pd.Series):
     ).fit(disp=False)
 
 
-def _fit_statsmodels_sarimax_weekly(series: pd.Series):
+def _fit_statsmodels_sarimax_weekly(series: pd.Series, exog: pd.DataFrame | None = None):
     """SARIMAX with a simple weekly seasonal component (s=5 trading days)."""
 
     from statsmodels.tsa.statespace.sarimax import SARIMAX
 
     return SARIMAX(
         series,
+        exog=exog,
         order=(1, 1, 1),
         seasonal_order=(1, 1, 1, 5),
         enforce_stationarity=False,
@@ -422,6 +524,84 @@ def _fit_hwes(series: pd.Series):
     ).fit()
 
 
+def _extract_exog(df: pd.DataFrame) -> pd.DataFrame | None:
+    if not all(col in df.columns for col in _EXOG_COLS):
+        return None
+    exog = df[list(_EXOG_COLS)].copy()
+    return exog if not exog.empty else None
+
+
+def _future_exog(df: pd.DataFrame, steps: int) -> pd.DataFrame | None:
+    exog = _extract_exog(df)
+    if exog is None or exog.empty:
+        return None
+    last = exog.iloc[-1].to_numpy(dtype=float)
+    return pd.DataFrame([last] * steps, columns=exog.columns)
+
+
+def _telr_changepoints(n: int) -> np.ndarray:
+    if n < 10:
+        return np.array([])
+    points = min(8, max(1, n // 60))
+    idx = (np.linspace(0.1, 0.9, points) * (n - 1)).astype(int)
+    return idx.astype(float)
+
+
+def _telr_features(
+    dates: list[pd.Timestamp],
+    t_index: np.ndarray,
+    changepoints: np.ndarray,
+    dow_order: tuple[int, ...],
+) -> np.ndarray:
+    t_index = t_index.astype(float)
+    features: list[np.ndarray] = [
+        np.ones_like(t_index, dtype=float),
+        t_index,
+    ]
+    for cp in changepoints:
+        features.append(np.maximum(0.0, t_index - cp))
+    dow = pd.to_datetime(pd.Series(dates)).dt.weekday.to_numpy()
+    for d in dow_order[:-1]:
+        features.append((dow == d).astype(float))
+    return np.vstack(features).T
+
+
+def _fit_telr(train_df: pd.DataFrame) -> dict[str, Any]:
+    dates = [pd.to_datetime(v) for v in train_df["ds"].tolist()]
+    y = np.asarray(train_df["y"].tolist(), dtype=float)
+    n = len(y)
+    t_index = np.arange(n, dtype=float)
+    changepoints = _telr_changepoints(n)
+    X = _telr_features(dates, t_index, changepoints, _BD_TRADING_DOWS)
+    coeffs, _, _, _ = np.linalg.lstsq(X, y, rcond=None)
+    return {
+        "type": "telr",
+        "coeffs": coeffs.tolist(),
+        "changepoints": changepoints.tolist(),
+        "train_len": n,
+        "dow_order": list(_BD_TRADING_DOWS),
+    }
+
+
+def _predict_telr_from_model(model: dict[str, Any], future_ds: list[pd.Timestamp]) -> list[float]:
+    train_len = int(model.get("train_len", 0))
+    if train_len <= 0:
+        return []
+    t_index = np.arange(train_len, train_len + len(future_ds), dtype=float)
+    changepoints = np.asarray(model.get("changepoints", []), dtype=float)
+    dow_order = tuple(int(v) for v in model.get("dow_order", _BD_TRADING_DOWS))
+    X = _telr_features([pd.to_datetime(v) for v in future_ds], t_index, changepoints, dow_order)
+    coeffs = np.asarray(model.get("coeffs", []), dtype=float)
+    if coeffs.size == 0:
+        return []
+    return [float(v) for v in (X @ coeffs).tolist()]
+
+
+def _predict_telr_on_dates(train_df: pd.DataFrame, future_ds: list[pd.Timestamp]) -> list[float]:
+    model = _fit_telr(train_df)
+    return _predict_telr_from_model(model, future_ds)
+
+
 def _series_from_df(df: pd.DataFrame) -> pd.Series:
     # Treat trading days as equally spaced steps.
     return pd.Series([float(v) for v in df["y"].tolist()])
@@ -429,6 +609,9 @@ def _series_from_df(df: pd.DataFrame) -> pd.Series:
 
 def _evaluate_algorithms(df: pd.DataFrame, holdout: int) -> tuple[dict[str, Any], str, float | None]:
     """Evaluate multiple algorithms on last-N holdout; return details + winner."""
+    last_close = float(df["y"].iloc[-1]) if not df.empty else None
+    price_bucket = _price_bucket(last_close)
+    preferred_models = _preferred_models_for_bucket(price_bucket)
 
     train_df, test_df = _split_holdout(df, holdout)
     if test_df.empty or len(train_df) < _MIN_TRAIN_ROWS:
@@ -438,6 +621,8 @@ def _evaluate_algorithms(df: pd.DataFrame, holdout: int) -> tuple[dict[str, Any]
                 "holdout": holdout,
                 "selected": "prophet:baseline_additive",
                 "evaluations": [],
+                "price_bucket": price_bucket,
+                "preferred_models": preferred_models,
             },
             "prophet:baseline_additive",
             None,
@@ -445,6 +630,9 @@ def _evaluate_algorithms(df: pd.DataFrame, holdout: int) -> tuple[dict[str, Any]
 
     future_ds = [pd.to_datetime(v) for v in test_df["ds"].tolist()]
     trues = [float(v) for v in test_df["y"].tolist()]
+    exog_all = _extract_exog(df)
+    train_exog = exog_all.loc[train_df.index] if exog_all is not None else None
+    test_exog = exog_all.loc[test_df.index] if exog_all is not None else None
 
     evaluations: list[dict[str, Any]] = []
 
@@ -453,11 +641,14 @@ def _evaluate_algorithms(df: pd.DataFrame, holdout: int) -> tuple[dict[str, Any]
         try:
             preds = _predict_prophet_on_dates(train_df, future_ds, strategy)
             metrics = _eval_metrics(trues, preds)
+            flat_penalty = _flat_penalty(trues, preds)
             evaluations.append(
                 {
                     "model": f"prophet:{strategy.name}",
                     "metrics": metrics,
-                    "score": round(_rank_score(metrics), 6),
+                    "flat_penalty": flat_penalty,
+                    "rank_key": _rank_key(metrics, flat_penalty),
+                    "score": round(_weighted_score(metrics), 6),
                 }
             )
         except Exception as e:
@@ -465,34 +656,73 @@ def _evaluate_algorithms(df: pd.DataFrame, holdout: int) -> tuple[dict[str, Any]
                 {
                     "model": f"prophet:{strategy.name}",
                     "metrics": {"rmse": None, "mape": None, "mae": None, "pfe": None, "residual_std": None},
+                    "flat_penalty": float("inf"),
+                    "rank_key": (float("inf"), float("inf"), float("inf"), float("inf")),
                     "score": float("inf"),
                     "error": str(e),
                 }
             )
 
+    # --- TELR (trend estimating linear regression) ---
+    try:
+        preds = _predict_telr_on_dates(train_df, future_ds)
+        metrics = _eval_metrics(trues, preds)
+        flat_penalty = _flat_penalty(trues, preds)
+        evaluations.append(
+            {
+                "model": "telr",
+                "metrics": metrics,
+                "flat_penalty": flat_penalty,
+                "rank_key": _rank_key(metrics, flat_penalty),
+                "score": round(_weighted_score(metrics), 6),
+            }
+        )
+    except Exception as e:
+        evaluations.append(
+            {
+                "model": "telr",
+                "metrics": {"rmse": None, "mape": None, "mae": None, "pfe": None, "residual_std": None},
+                "flat_penalty": float("inf"),
+                "rank_key": (float("inf"), float("inf"), float("inf"), float("inf")),
+                "score": float("inf"),
+                "error": str(e),
+            }
+        )
+
     # --- Classic time series models (close only) ---
     train_series = _series_from_df(train_df)
 
-    def _eval_stats_model(name: str, fit_fn) -> None:
+    def _eval_stats_model(
+        name: str,
+        fit_fn,
+        exog_train: pd.DataFrame | None = None,
+        exog_test: pd.DataFrame | None = None,
+    ) -> None:
         try:
-            fitted = fit_fn(train_series)
+            fitted = fit_fn(train_series, exog_train)
 
             # Prefer forecast with steps.
             forecast = None
             if hasattr(fitted, "get_forecast"):
-                forecast = fitted.get_forecast(steps=len(test_df))
+                forecast = fitted.get_forecast(steps=len(test_df), exog=exog_test)
                 preds = [float(v) for v in forecast.predicted_mean.tolist()]
             elif hasattr(fitted, "forecast"):
-                preds = [float(v) for v in fitted.forecast(steps=len(test_df)).tolist()]
+                if exog_test is not None:
+                    preds = [float(v) for v in fitted.forecast(steps=len(test_df), exog=exog_test).tolist()]
+                else:
+                    preds = [float(v) for v in fitted.forecast(steps=len(test_df)).tolist()]
             else:
                 preds = []
 
             metrics = _eval_metrics(trues, preds)
+            flat_penalty = _flat_penalty(trues, preds)
             evaluations.append(
                 {
                     "model": name,
                     "metrics": metrics,
-                    "score": round(_rank_score(metrics), 6),
+                    "flat_penalty": flat_penalty,
+                    "rank_key": _rank_key(metrics, flat_penalty),
+                    "score": round(_weighted_score(metrics), 6),
                 }
             )
         except Exception as e:
@@ -500,6 +730,8 @@ def _evaluate_algorithms(df: pd.DataFrame, holdout: int) -> tuple[dict[str, Any]
                 {
                     "model": name,
                     "metrics": {"rmse": None, "mape": None, "mae": None, "pfe": None, "residual_std": None},
+                    "flat_penalty": float("inf"),
+                    "rank_key": (float("inf"), float("inf"), float("inf"), float("inf")),
                     "score": float("inf"),
                     "error": str(e),
                 }
@@ -507,23 +739,38 @@ def _evaluate_algorithms(df: pd.DataFrame, holdout: int) -> tuple[dict[str, Any]
 
     _eval_stats_model("arima(1,1,1)", _fit_statsmodels_arima)
     _eval_stats_model("arima(1,1,1)+drift", _fit_statsmodels_arima_drift)
-    _eval_stats_model("sarimax(1,1,1)", _fit_statsmodels_sarimax)
-    _eval_stats_model("sarimax(1,1,1)x(1,0,1,5)", _fit_statsmodels_sarimax_weekly)
+    _eval_stats_model("sarimax(1,1,1)", _fit_statsmodels_sarimax, train_exog, test_exog)
+    _eval_stats_model("sarimax(1,1,1)x(1,1,1,5)", _fit_statsmodels_sarimax_weekly, train_exog, test_exog)
     # Removed SES and HWES because they use exponential smoothing which
     # always produces flat forecasts (repeats the last value).
     # They fail to capture trend changes. ARIMA/SARIMAX with differencing work much better.
 
-    ranked = sorted(evaluations, key=lambda item: float(item.get("score", float("inf"))))
+    ranked = sorted(evaluations, key=lambda item: tuple(item.get("rank_key", (float("inf"),) * 4)))
     winner = ranked[0]["model"] if ranked else "prophet:baseline_additive"
     residual_std = None
     if ranked and isinstance(ranked[0].get("metrics"), dict):
         residual_std = ranked[0]["metrics"].get("residual_std")
+
+    if preferred_models and ranked:
+        best_metrics = ranked[0].get("metrics") or {}
+        for model_name in preferred_models:
+            candidate = next((item for item in ranked if item.get("model") == model_name), None)
+            if not candidate:
+                continue
+            if float(candidate.get("flat_penalty") or 0.0) > 0.0:
+                continue
+            if _metrics_close(candidate.get("metrics") or {}, best_metrics):
+                winner = candidate["model"]
+                residual_std = candidate.get("metrics", {}).get("residual_std")
+                break
 
     return (
         {
             "holdout": holdout,
             "selected": winner,
             "evaluations": ranked,
+            "price_bucket": price_bucket,
+            "preferred_models": preferred_models,
         },
         winner,
         (float(residual_std) if residual_std is not None else None),
@@ -646,7 +893,7 @@ def _load_pickle_model(code: str) -> Any | None:
 
 def train_model(code: str) -> None:
     logger.info(f"[TRAIN_START] Training model for code={code}")
-    df = _load_series(code)
+    df = _load_series(code, include_exog=True)
     if df.empty or len(df) < 2:
         logger.error(f"[TRAIN_ERROR] Not enough data for code={code}, rows={len(df)}")
         raise ValueError(f"Not enough data to train model for code={code}")
@@ -672,10 +919,12 @@ def train_model(code: str) -> None:
             else:
                 fitted = _fit_statsmodels_arima(series)
         elif selected_model.startswith("sarimax"):
-            if "x(1,0,1,5)" in selected_model:
-                fitted = _fit_statsmodels_sarimax_weekly(series)
+            if "x(1,1,1,5)" in selected_model or "x(1,0,1,5)" in selected_model:
+                fitted = _fit_statsmodels_sarimax_weekly(series, _extract_exog(df))
             else:
-                fitted = _fit_statsmodels_sarimax(series)
+                fitted = _fit_statsmodels_sarimax(series, _extract_exog(df))
+        elif selected_model == "telr":
+            fitted = _fit_telr(df)
         else:
             # Fallback to Prophet if something unexpected happens (e.g., old model type).
             strategy = _STRATEGIES[0]
@@ -777,8 +1026,8 @@ def forecast_next_days(code: str) -> list[dict[str, Any]]:
         logger.error(f"[FORECAST_ERROR] Model missing after training for code={code}")
         raise RuntimeError(f"Model missing after training for code={code}")
 
-    # Load historical data for trend estimation (used in flat forecast workaround)
-    df = _load_series(code)
+    # Load historical data for trend estimation and exogenous features.
+    df = _load_series(code, include_exog=True)
     
     # Forecast next N Bangladesh trading days (Sun-Thu), skipping Fri/Sat.
     last_observed = _db_max_date(code)
@@ -805,22 +1054,34 @@ def forecast_next_days(code: str) -> list[dict[str, Any]]:
         lower: list[float] | None = None
         upper: list[float] | None = None
 
-        if hasattr(sm_model, "get_forecast"):
-            fc = sm_model.get_forecast(steps=steps)
-            yhat = [float(v) for v in fc.predicted_mean.tolist()]
-            try:
-                alpha = 1.0 - float(settings.interval_width)
-                ci = fc.conf_int(alpha=alpha)
-                # columns may be named like "lower y" / "upper y".
-                lower = [float(v) for v in ci.iloc[:, 0].tolist()]
-                upper = [float(v) for v in ci.iloc[:, 1].tolist()]
-            except Exception:
-                lower = None
-                upper = None
-        elif hasattr(sm_model, "forecast"):
-            yhat = [float(v) for v in sm_model.forecast(steps=steps).tolist()]
+        if isinstance(sm_model, dict) and sm_model.get("type") == "telr":
+            yhat = _predict_telr_from_model(sm_model, future_ds)
         else:
-            yhat = []
+            exog_future = None
+            if hasattr(sm_model, "model"):
+                model_exog = getattr(sm_model.model, "exog", None)
+                if model_exog is not None and np.size(model_exog) > 0:
+                    exog_future = _future_exog(df, steps)
+
+            if hasattr(sm_model, "get_forecast"):
+                fc = sm_model.get_forecast(steps=steps, exog=exog_future)
+                yhat = [float(v) for v in fc.predicted_mean.tolist()]
+                try:
+                    alpha = 1.0 - float(settings.interval_width)
+                    ci = fc.conf_int(alpha=alpha)
+                    # columns may be named like "lower y" / "upper y".
+                    lower = [float(v) for v in ci.iloc[:, 0].tolist()]
+                    upper = [float(v) for v in ci.iloc[:, 1].tolist()]
+                except Exception:
+                    lower = None
+                    upper = None
+            elif hasattr(sm_model, "forecast"):
+                if exog_future is not None:
+                    yhat = [float(v) for v in sm_model.forecast(steps=steps, exog=exog_future).tolist()]
+                else:
+                    yhat = [float(v) for v in sm_model.forecast(steps=steps).tolist()]
+            else:
+                yhat = []
 
         residual_std = float(meta.residual_std) if (meta and meta.residual_std is not None) else 0.0
         
